@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6366f1;
+  --color-bg-dark: #0a0a0f;
+  --color-bg-panel: #12121a;
+  --color-bg-elevated: #1a1a25;
+  --color-border-subtle: #2a2a3a;
+  --color-text-primary: #f0f0f5;
+  --color-text-muted: #8888a0;
+  --color-accent-coral: #ff6b6b;
+  --color-accent-teal: #4ecdc4;
+  --color-accent-sky: #45b7d1;
+}
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: 'Outfit', system-ui, sans-serif;
+    background: var(--color-bg-dark);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: inherit;
+  }
+
+  input, select {
+    font-family: inherit;
+    color: inherit;
+  }
+}

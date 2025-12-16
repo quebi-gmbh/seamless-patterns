@@ -1,0 +1,143 @@
+.zoom-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  padding: 1rem;
+}
+
+.zoom-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.zoom-view-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.zoom-coordinates {
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+  color: var(--text-muted);
+  background: var(--bg-dark);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.zoom-view-canvas-wrapper {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--border-subtle);
+  background: var(--bg-dark);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.zoom-view-canvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.zoom-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.zoom-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.zoom-control-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.zoom-level-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.zoom-level-btn {
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.15s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoom-level-btn:hover {
+  background: rgba(18, 18, 26, 0.8);
+  border-color: var(--text-muted);
+}
+
+.zoom-level-btn.active {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  color: white;
+}
+
+.follow-mode-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.follow-mode-btn {
+  padding: 0.5rem;
+  border-radius: 6px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.follow-mode-btn svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
+
+.follow-mode-btn:hover:not(:disabled) {
+  background: rgba(18, 18, 26, 0.8);
+  border-color: var(--text-muted);
+}
+
+.follow-mode-btn.active {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+}
+
+.follow-mode-btn.active svg {
+  opacity: 1;
+}
+
+.follow-mode-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}

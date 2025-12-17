@@ -1443,6 +1443,14 @@ function App() {
         </aside>
       </main>
 
+      <footer className="flex items-center justify-center gap-4 px-6 py-3 bg-bg-panel/80 backdrop-blur-sm border-t border-primary/10 text-xs text-text-muted">
+        <a href="https://quebi.de/imprint" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Imprint</a>
+        <span className="text-primary/30">|</span>
+        <a href="https://quebi.de/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Privacy</a>
+        <span className="text-primary/30">|</span>
+        <a href="https://quebi.de/terms" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Terms</a>
+      </footer>
+
       <ImportDialog
         isOpen={isImportDialogOpen}
         onClose={() => setIsImportDialogOpen(false)}

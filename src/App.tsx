@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Canvas as FabricCanvasType } from 'fabric'
-import { Circle, Rect, FabricImage, loadSVGFromURL, util as fabricUtil, PencilBrush } from 'fabric'
+import { Circle, Rect, FabricImage, loadSVGFromURL, util as fabricUtil, PencilBrush, ActiveSelection } from 'fabric'
+import { Button } from 'react-aria-components'
+import { MousePointer2, Brush, Eraser, Square, Circle as CircleIcon, FileUp } from 'lucide-react'
 import { FabricCanvas } from './components/Canvas/FabricCanvas'
 import { GridOverlay } from './components/Canvas/GridOverlay'
 import { ZoomView } from './components/Canvas/ZoomView'
@@ -18,6 +20,7 @@ import { RecoveryDialog } from './components/RecoveryDialog/RecoveryDialog'
 import { useTilingEngine } from './hooks/useTilingEngine'
 import { usePlacementControls } from './hooks/usePlacementControls'
 import { LayerManager } from './core/LayerManager'
+import { EntityGroupManager } from './core/EntityGroupManager'
 import type { ExtendedFabricObject } from './types/FabricExtensions'
 import { exportProjectAsJSON, serializeProject } from './utils/projectExport'
 import { importProjectFromFile, deserializeProject } from './utils/projectImport'
@@ -40,12 +43,13 @@ function App() {
   const [shapeStart, setShapeStart] = useState<{ x: number; y: number } | null>(null)
   const [tempShape, setTempShape] = useState<any>(null)
   const [layerManager, setLayerManager] = useState<LayerManager | null>(null)
+  const [entityGroupManager, setEntityGroupManager] = useState<EntityGroupManager | null>(null)
   const [currentLayerId, setCurrentLayerId] = useState<string>('')
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isSVGCodeDialogOpen, setIsSVGCodeDialogOpen] = useState(false)
   const [editingSVGId, setEditingSVGId] = useState<string | null>(null)
   const [editingSVGCode, setEditingSVGCode] = useState<string>('')
-  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null)
+  const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set())
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isProjectExportDialogOpen, setIsProjectExportDialogOpen] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
@@ -65,13 +69,16 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(3)
   const [followMode, setFollowMode] = useState<'cursor' | 'object' | 'manual'>('cursor')
 
-  // Initialize LayerManager when canvas is ready
+  // Initialize LayerManager and EntityGroupManager when canvas is ready
   useEffect(() => {
     if (!fabricCanvas || layerManager) return
 
     const manager = new LayerManager(fabricCanvas)
     setLayerManager(manager)
     setCurrentLayerId(manager.getDefaultLayerId())
+
+    const groupManager = new EntityGroupManager(fabricCanvas, manager)
+    setEntityGroupManager(groupManager)
   }, [fabricCanvas, layerManager])
 
   // Auto-save function with debounce
@@ -85,14 +92,14 @@ function App() {
 
     // Set new timeout (2 seconds debounce)
     autoSaveTimeoutRef.current = setTimeout(() => {
-      const projectData = serializeProject(fabricCanvas, layerManager, DRAWING_TILE_SIZE)
+      const projectData = serializeProject(fabricCanvas, layerManager, DRAWING_TILE_SIZE, entityGroupManager)
       const success = saveToLocalStorage(projectData)
 
       if (!success) {
         console.warn('Auto-save failed - project may be too large')
       }
     }, 2000)
-  }, [fabricCanvas, layerManager])
+  }, [fabricCanvas, layerManager, entityGroupManager])
 
   // Use placement controls hook
   const { updatePosition, updateRotation, updateScale } = usePlacementControls({
@@ -180,23 +187,108 @@ function App() {
     if (!fabricCanvas) return
 
     const handleSelectionCreated = (e: any) => {
-      const selected = e.selected?.[0] as ExtendedFabricObject
-      if (selected?.tiledMetadata?.mirrorGroupId) {
-        setSelectedEntityId(selected.tiledMetadata.mirrorGroupId)
-        setSelectedObject(selected)
+      // Get selected objects - either from event or from ActiveSelection
+      let selected = e.selected as ExtendedFabricObject[]
+      const activeObject = fabricCanvas.getActiveObject()
+
+      // If activeObject is an ActiveSelection, get all objects from it
+      if (activeObject?.type === 'activeselection') {
+        selected = (activeObject as any).getObjects() as ExtendedFabricObject[]
+      }
+
+      if (!selected || selected.length === 0) return
+
+      const newSelectedIds = new Set<string>()
+      let hasEntityGroup = false
+
+      selected.forEach((obj) => {
+        if (obj?.tiledMetadata?.mirrorGroupId) {
+          const mirrorGroupId = obj.tiledMetadata.mirrorGroupId
+
+          // If object is in an entity group, select all group members
+          const entityGroupId = obj.tiledMetadata.entityGroupId
+          if (entityGroupId && entityGroupManager) {
+            hasEntityGroup = true
+            const group = entityGroupManager.getGroup(entityGroupId)
+            if (group) {
+              group.memberMirrorGroupIds.forEach((id) => newSelectedIds.add(id))
+            }
+          } else {
+            newSelectedIds.add(mirrorGroupId)
+          }
+        }
+      })
+
+      setSelectedEntityIds(newSelectedIds)
+
+      // If entity group involved, select all center-tile objects for proper bounding box
+      if (hasEntityGroup && layerManager && newSelectedIds.size > 1) {
+        const objectsToSelect: ExtendedFabricObject[] = []
+        newSelectedIds.forEach((mirrorGroupId) => {
+          const objects = layerManager.getObjectsByMirrorGroup(mirrorGroupId)
+          // Find center tile object (position [0,0])
+          const centerTile = objects.find(
+            (obj) => obj.tiledMetadata?.tilePosition[0] === 0 && obj.tiledMetadata?.tilePosition[1] === 0
+          )
+          if (centerTile) {
+            objectsToSelect.push(centerTile)
+          }
+        })
+
+        if (objectsToSelect.length > 1) {
+          // Create active selection with all group members
+          const newSelection = new ActiveSelection(objectsToSelect, { canvas: fabricCanvas })
+          fabricCanvas.setActiveObject(newSelection)
+          fabricCanvas.requestRenderAll()
+        }
+      }
+
+      // Set the first selected object for placement panel
+      if (selected[0]) {
+        setSelectedObject(selected[0])
       }
     }
 
     const handleSelectionUpdated = (e: any) => {
-      const selected = e.selected?.[0] as ExtendedFabricObject
-      if (selected?.tiledMetadata?.mirrorGroupId) {
-        setSelectedEntityId(selected.tiledMetadata.mirrorGroupId)
-        setSelectedObject(selected)
+      // Get selected objects - either from event or from ActiveSelection
+      let selected = e.selected as ExtendedFabricObject[]
+      const activeObject = fabricCanvas.getActiveObject()
+
+      // If activeObject is an ActiveSelection, get all objects from it
+      if (activeObject?.type === 'activeselection') {
+        selected = (activeObject as any).getObjects() as ExtendedFabricObject[]
+      }
+
+      if (!selected || selected.length === 0) return
+
+      const newSelectedIds = new Set<string>()
+
+      selected.forEach((obj) => {
+        if (obj?.tiledMetadata?.mirrorGroupId) {
+          const mirrorGroupId = obj.tiledMetadata.mirrorGroupId
+
+          // If object is in an entity group, select all group members
+          const entityGroupId = obj.tiledMetadata.entityGroupId
+          if (entityGroupId && entityGroupManager) {
+            const group = entityGroupManager.getGroup(entityGroupId)
+            if (group) {
+              group.memberMirrorGroupIds.forEach((id) => newSelectedIds.add(id))
+            }
+          } else {
+            newSelectedIds.add(mirrorGroupId)
+          }
+        }
+      })
+
+      setSelectedEntityIds(newSelectedIds)
+      // Set the first selected object for placement panel
+      if (selected[0]) {
+        setSelectedObject(selected[0])
       }
     }
 
     const handleSelectionCleared = () => {
-      setSelectedEntityId(null)
+      setSelectedEntityIds(new Set())
       setSelectedObject(null)
     }
 
@@ -209,7 +301,7 @@ function App() {
       fabricCanvas.off('selection:updated', handleSelectionUpdated)
       fabricCanvas.off('selection:cleared', handleSelectionCleared)
     }
-  }, [fabricCanvas])
+  }, [fabricCanvas, entityGroupManager])
 
   // Track object modifications to update placement panel
   useEffect(() => {
@@ -520,23 +612,77 @@ function App() {
       const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgCode)
 
       loadSVGFromURL(dataUrl).then(async (result: any) => {
-        const svgGroup = fabricUtil.groupSVGElements(result.objects, result.options)
-
-        // Scale down if too large
-        const maxSize = DRAWING_TILE_SIZE * 0.8
-        if (svgGroup.width! > maxSize || svgGroup.height! > maxSize) {
-          const scale = maxSize / Math.max(svgGroup.width!, svgGroup.height!)
-          svgGroup.scale(scale)
-        }
-
-        // Position at center of center tile
-        const position = { x: DRAWING_TILE_SIZE * 1.5, y: DRAWING_TILE_SIZE * 1.5 }
-        await tilingEngine.createTiledObject(svgGroup, position, currentLayerId)
-        fabricCanvas.requestRenderAll()
+        await importSVGObjects(result.objects, result.options)
       }).catch((err) => console.error('SVG load error:', err))
     } catch (err) {
       console.error('Failed to import SVG code:', err)
     }
+  }
+
+  // Helper to import SVG objects - creates separate entities for multi-element SVGs
+  const importSVGObjects = async (objects: any[], options: any) => {
+    if (!fabricCanvas || !tilingEngine) return
+
+    const basePosition = { x: DRAWING_TILE_SIZE * 1.5, y: DRAWING_TILE_SIZE * 1.5 }
+    const maxSize = DRAWING_TILE_SIZE * 0.8
+
+    // If only one object or no objects, use existing single-group behavior
+    if (objects.length <= 1) {
+      const svgGroup = fabricUtil.groupSVGElements(objects, options)
+      if (svgGroup.width! > maxSize || svgGroup.height! > maxSize) {
+        const scale = maxSize / Math.max(svgGroup.width!, svgGroup.height!)
+        svgGroup.scale(scale)
+      }
+      await tilingEngine.createTiledObject(svgGroup, basePosition, currentLayerId)
+      fabricCanvas.requestRenderAll()
+      return
+    }
+
+    // Multiple elements: create each as separate tiled entity
+    // Calculate bounding box of all objects to determine scale
+    const svgGroup = fabricUtil.groupSVGElements(objects, options)
+    const groupWidth = svgGroup.width || 1
+    const groupHeight = svgGroup.height || 1
+    const scale = Math.min(1, maxSize / Math.max(groupWidth, groupHeight))
+
+    // Get offset from options (viewBox origin)
+    const offsetX = options.left || 0
+    const offsetY = options.top || 0
+
+    const createdMirrorGroupIds: string[] = []
+
+    for (const obj of objects) {
+      // Clone the object to avoid mutation issues
+      const cloned = await obj.clone()
+
+      // Scale the object
+      cloned.scale((cloned.scaleX || 1) * scale)
+
+      // Position relative to center tile, accounting for SVG viewBox offset
+      const objLeft = (cloned.left || 0) - offsetX
+      const objTop = (cloned.top || 0) - offsetY
+      const position = {
+        x: basePosition.x + objLeft * scale,
+        y: basePosition.y + objTop * scale
+      }
+
+      // Create tiled object and capture its mirrorGroupId
+      const tiledObjects = await tilingEngine.createTiledObject(cloned, position, currentLayerId)
+      if (tiledObjects.length > 0 && tiledObjects[0].tiledMetadata?.mirrorGroupId) {
+        createdMirrorGroupIds.push(tiledObjects[0].tiledMetadata.mirrorGroupId)
+      }
+    }
+
+    // Auto-group if multiple entities were created
+    if (createdMirrorGroupIds.length > 1 && entityGroupManager) {
+      const group = entityGroupManager.createGroup(createdMirrorGroupIds, 'SVG Import')
+      if (group) {
+        // Select the new group to update UI
+        setSelectedEntityIds(new Set(group.memberMirrorGroupIds))
+      }
+    }
+
+    fabricCanvas.requestRenderAll()
   }
 
   const handleSVGImport = async (file: File) => {
@@ -547,21 +693,9 @@ function App() {
       const dataUrl = event.target?.result as string
 
       if (file.type.includes('svg')) {
-        // Handle SVG
+        // Handle SVG - use helper that creates separate entities for multi-element SVGs
         loadSVGFromURL(dataUrl).then(async (result: any) => {
-          const svgGroup = fabricUtil.groupSVGElements(result.objects, result.options)
-
-          // Scale down if too large
-          const maxSize = DRAWING_TILE_SIZE * 0.8
-          if (svgGroup.width! > maxSize || svgGroup.height! > maxSize) {
-            const scale = maxSize / Math.max(svgGroup.width!, svgGroup.height!)
-            svgGroup.scale(scale)
-          }
-
-          // Position at center of center tile
-          const position = { x: DRAWING_TILE_SIZE * 1.5, y: DRAWING_TILE_SIZE * 1.5 }
-          await tilingEngine.createTiledObject(svgGroup, position, currentLayerId)
-          fabricCanvas.requestRenderAll()
+          await importSVGObjects(result.objects, result.options)
         }).catch((err) => console.error('SVG load error:', err))
       } else {
         // Handle images (PNG, JPEG)
@@ -623,6 +757,60 @@ function App() {
     setEditingSVGId(mirrorGroupId)
     setEditingSVGCode(svgCode)
   }
+
+  // Group selected entities
+  const handleGroupSelected = useCallback(() => {
+    if (!entityGroupManager || selectedEntityIds.size < 2) return
+
+    const mirrorGroupIds = Array.from(selectedEntityIds)
+    const group = entityGroupManager.createGroup(mirrorGroupIds)
+
+    if (group) {
+      // Update selection to reflect the group - this triggers EntityPanel refresh
+      setSelectedEntityIds(new Set(group.memberMirrorGroupIds))
+    }
+  }, [entityGroupManager, selectedEntityIds])
+
+  // Ungroup selected entity group
+  const handleUngroupSelected = useCallback(() => {
+    if (!entityGroupManager || selectedEntityIds.size === 0) return
+
+    // Find the first selected entity that is in a group
+    for (const mirrorGroupId of selectedEntityIds) {
+      const group = entityGroupManager.getGroupByMirrorGroupId(mirrorGroupId)
+      if (group) {
+        const memberIds = entityGroupManager.ungroup(group.id)
+        // Keep the same entities selected after ungrouping
+        setSelectedEntityIds(new Set(memberIds))
+        return
+      }
+    }
+  }, [entityGroupManager, selectedEntityIds])
+
+  // Keyboard shortcuts for grouping
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in input fields
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      // Ctrl/Cmd + G = Group
+      if ((e.ctrlKey || e.metaKey) && e.key === 'g' && !e.shiftKey) {
+        e.preventDefault()
+        handleGroupSelected()
+      }
+
+      // Ctrl/Cmd + Shift + G = Ungroup
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'g') {
+        e.preventDefault()
+        handleUngroupSelected()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleGroupSelected, handleUngroupSelected])
 
   const handleSelectEntity = (mirrorGroupId: string) => {
     if (!fabricCanvas || !layerManager) return
@@ -699,7 +887,7 @@ function App() {
     if (!fabricCanvas || !layerManager) return
 
     try {
-      exportProjectAsJSON(fabricCanvas, layerManager, DRAWING_TILE_SIZE, filename)
+      exportProjectAsJSON(fabricCanvas, layerManager, DRAWING_TILE_SIZE, filename, entityGroupManager)
       setIsProjectExportDialogOpen(false)
       // Clear dirty state and autosave after successful export
       setIsDirty(false)
@@ -721,7 +909,7 @@ function App() {
     setIsImporting(true)
 
     try {
-      await importProjectFromFile(file, fabricCanvas, layerManager, tilingEngine)
+      await importProjectFromFile(file, fabricCanvas, layerManager, tilingEngine, entityGroupManager)
 
       // Update current layer to first imported layer
       const layers = layerManager.getLayers()
@@ -758,7 +946,7 @@ function App() {
     }
 
     try {
-      await deserializeProject(projectData, fabricCanvas, layerManager, tilingEngine)
+      await deserializeProject(projectData, fabricCanvas, layerManager, tilingEngine, entityGroupManager)
 
       // Update current layer to first imported layer
       const layers = layerManager.getLayers()
@@ -796,84 +984,72 @@ function App() {
           <div className="flex flex-col gap-2">
             <span className="text-xs font-medium text-text-muted uppercase tracking-wide">Tools</span>
             <div className="grid grid-cols-3 gap-2">
-              <button
+              <Button
                 className={`p-3 rounded transition-colors ${
                   tool === 'select'
                     ? 'bg-accent-teal/20 text-accent-teal'
                     : 'bg-white/5 text-text-muted hover:bg-white/10'
                 }`}
-                onClick={() => setTool('select')}
-                title="Select"
+                onPress={() => setTool('select')}
+                aria-label="Select tool"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path d="M3,3H21V5H3V3M3,7H15V9H3V7M3,11H21V13H3V11M3,15H15V17H3V15M3,19H21V21H3V19Z" />
-                </svg>
-              </button>
-              <button
+                <MousePointer2 size={20} />
+              </Button>
+              <Button
                 className={`p-3 rounded transition-colors ${
                   tool === 'brush'
                     ? 'bg-accent-teal/20 text-accent-teal'
                     : 'bg-white/5 text-text-muted hover:bg-white/10'
                 }`}
-                onClick={() => setTool('brush')}
-                title="Brush"
+                onPress={() => setTool('brush')}
+                aria-label="Brush tool"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path d="M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34a.996.996 0 0 0-1.41 0L9 12.25 11.75 15l8.96-8.96a.996.996 0 0 0 0-1.41z"/>
-                </svg>
-              </button>
-              <button
+                <Brush size={20} />
+              </Button>
+              <Button
                 className={`p-3 rounded transition-colors ${
                   tool === 'eraser'
                     ? 'bg-accent-teal/20 text-accent-teal'
                     : 'bg-white/5 text-text-muted hover:bg-white/10'
                 }`}
-                onClick={() => setTool('eraser')}
-                title="Eraser"
+                onPress={() => setTool('eraser')}
+                aria-label="Eraser tool"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95z"/>
-                </svg>
-              </button>
-              <button
+                <Eraser size={20} />
+              </Button>
+              <Button
                 className={`p-3 rounded transition-colors ${
                   tool === 'rectangle'
                     ? 'bg-accent-teal/20 text-accent-teal'
                     : 'bg-white/5 text-text-muted hover:bg-white/10'
                 }`}
-                onClick={() => setTool('rectangle')}
-                title="Rectangle"
+                onPress={() => setTool('rectangle')}
+                aria-label="Rectangle tool"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path d="M4,6V19H20V6H4M18,17H6V8H18V17Z" />
-                </svg>
-              </button>
-              <button
+                <Square size={20} />
+              </Button>
+              <Button
                 className={`p-3 rounded transition-colors ${
                   tool === 'circle'
                     ? 'bg-accent-teal/20 text-accent-teal'
                     : 'bg-white/5 text-text-muted hover:bg-white/10'
                 }`}
-                onClick={() => setTool('circle')}
-                title="Circle"
+                onPress={() => setTool('circle')}
+                aria-label="Circle tool"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
-                </svg>
-              </button>
-              <button
+                <CircleIcon size={20} />
+              </Button>
+              <Button
                 className={`p-3 rounded transition-colors ${
                   tool === 'svg'
                     ? 'bg-accent-teal/20 text-accent-teal'
                     : 'bg-white/5 text-text-muted hover:bg-white/10'
                 }`}
-                onClick={() => setIsImportDialogOpen(true)}
-                title="Import SVG"
+                onPress={() => setIsImportDialogOpen(true)}
+                aria-label="Import SVG or image"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M10,19L12,15H9V10H15V15L13,19H10Z" />
-                </svg>
-              </button>
+                <FileUp size={20} />
+              </Button>
             </div>
           </div>
 
@@ -936,53 +1112,60 @@ function App() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <button
+            <Button
               className={`px-3 py-2 rounded text-sm transition-colors ${
                 showZoomView
                   ? 'bg-accent-teal/20 text-accent-teal'
                   : 'bg-white/5 text-text-primary hover:bg-white/10'
               }`}
-              onClick={() => setShowZoomView(!showZoomView)}
+              onPress={() => setShowZoomView(!showZoomView)}
+              aria-label={showZoomView ? 'Hide zoom view' : 'Show zoom view'}
             >
               {showZoomView ? 'Hide Zoom' : 'Show Zoom'}
-            </button>
-            <button
+            </Button>
+            <Button
               className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
-              onClick={handleImportClick}
+              onPress={handleImportClick}
+              aria-label="Import file"
             >
               Import File
-            </button>
-            <button
+            </Button>
+            <Button
               className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
-              onClick={() => setIsSVGCodeDialogOpen(true)}
+              onPress={() => setIsSVGCodeDialogOpen(true)}
+              aria-label="Open SVG code editor"
             >
               SVG Code
-            </button>
-            <button
+            </Button>
+            <Button
               className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
-              onClick={clearCanvas}
+              onPress={clearCanvas}
+              aria-label="Clear canvas"
             >
               Clear
-            </button>
-            <button
+            </Button>
+            <Button
               className="px-3 py-2 bg-accent-teal hover:bg-accent-teal/90 rounded text-sm font-medium transition-colors"
-              onClick={handleExportClick}
+              onPress={handleExportClick}
+              aria-label="Export tile"
             >
               Export
-            </button>
-            <button
+            </Button>
+            <Button
               className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={handleImportProjectClick}
-              disabled={isImporting}
+              onPress={handleImportProjectClick}
+              isDisabled={isImporting}
+              aria-label="Import project"
             >
               {isImporting ? 'Importing...' : 'Import Project'}
-            </button>
-            <button
+            </Button>
+            <Button
               className="px-3 py-2 bg-accent-teal hover:bg-accent-teal/90 rounded text-sm font-medium transition-colors"
-              onClick={() => setIsProjectExportDialogOpen(true)}
+              onPress={() => setIsProjectExportDialogOpen(true)}
+              aria-label="Export project"
             >
               Export Project
-            </button>
+            </Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -1046,7 +1229,7 @@ function App() {
           </div>
         </div>
 
-        <aside className="w-80 bg-bg-panel border-l border-border-subtle flex flex-col gap-3 p-4 overflow-y-auto">
+        <aside className="w-96 bg-bg-panel border-l border-border-subtle flex flex-col gap-3 p-4 overflow-y-auto">
           <LayerPanel
             layerManager={layerManager}
             currentLayerId={currentLayerId}
@@ -1056,11 +1239,15 @@ function App() {
             <EntityPanel
               fabricCanvas={fabricCanvas}
               layerManager={layerManager}
+              entityGroupManager={entityGroupManager}
               currentLayerId={currentLayerId}
-              selectedEntityId={selectedEntityId}
+              selectedEntityIds={selectedEntityIds}
               onSelectEntity={handleSelectEntity}
+              onSelectionChange={setSelectedEntityIds}
               onDuplicateEntity={handleDuplicateEntity}
               onEditSVG={handleEditSVG}
+              onGroupSelected={handleGroupSelected}
+              onUngroupSelected={handleUngroupSelected}
             />
           </CollapsiblePanel>
           <CollapsiblePanel title="Advanced Placement" defaultCollapsed={false}>

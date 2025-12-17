@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NumberField, Label, Input, Button, Switch } from 'react-aria-components'
+import { Lock, Unlock } from 'lucide-react'
 import type { ExtendedFabricObject } from '../../types/FabricExtensions'
 
 interface PlacementPanelProps {
@@ -105,7 +106,7 @@ export function PlacementPanel({
   return (
     <div className="flex flex-col gap-4">
       {/* Position Controls */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <Label className="text-xs font-medium text-text-muted">Position</Label>
         <NumberField
           value={x}
@@ -147,7 +148,7 @@ export function PlacementPanel({
       </NumberField>
 
       {/* Scale Controls */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium text-text-muted">Scale</Label>
           <Button
@@ -159,51 +160,43 @@ export function PlacementPanel({
             }`}
             aria-label={lockAspectRatio ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-              {lockAspectRatio ? (
-                <path d="M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10A2,2 0 0,1 6,8H15V6A3,3 0 0,0 12,3A3,3 0 0,0 9,6H7A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17Z" />
-              ) : (
-                <path d="M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H15V6A3,3 0 0,0 12,3A3,3 0 0,0 9,6H7A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17Z" />
-              )}
-            </svg>
+            {lockAspectRatio ? <Lock size={16} /> : <Unlock size={16} />}
           </Button>
         </div>
-        <div className="flex gap-2">
-          <NumberField
-            value={parseFloat(scaleX.toFixed(2))}
-            onChange={handleScaleXChange}
-            step={0.1}
-            minValue={0.1}
-            className="flex-1 flex flex-col gap-1"
-            aria-label="Scale X"
-          >
-            <Label className="text-xs text-text-muted">X</Label>
-            <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
-          </NumberField>
-          <NumberField
-            value={parseFloat(scaleY.toFixed(2))}
-            onChange={handleScaleYChange}
-            step={0.1}
-            minValue={0.1}
-            isDisabled={lockAspectRatio}
-            className="flex-1 flex flex-col gap-1"
-            aria-label="Scale Y"
-          >
-            <Label className="text-xs text-text-muted">Y</Label>
-            <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed" />
-          </NumberField>
-        </div>
+        <NumberField
+          value={parseFloat(scaleX.toFixed(2))}
+          onChange={handleScaleXChange}
+          step={0.1}
+          minValue={0.1}
+          className="flex flex-col gap-1"
+          aria-label="Scale X"
+        >
+          <Label className="text-xs text-text-muted">X</Label>
+          <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+        </NumberField>
+        <NumberField
+          value={parseFloat(scaleY.toFixed(2))}
+          onChange={handleScaleYChange}
+          step={0.1}
+          minValue={0.1}
+          isDisabled={lockAspectRatio}
+          className="flex flex-col gap-1"
+          aria-label="Scale Y"
+        >
+          <Label className="text-xs text-text-muted">Y</Label>
+          <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed" />
+        </NumberField>
       </div>
 
       {/* Snap to Grid */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <Switch
           isSelected={snapToGrid}
           onChange={onToggleSnapToGrid}
           className="group flex items-center gap-2"
         >
           <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition group-data-selected:bg-accent-teal">
-            <span className="h-4 w-4 rounded-full bg-white transition group-data-selected:translate-x-4" />
+            <span className="h-4 w-4 rounded-full bg-white transition-transform duration-200 group-data-selected:translate-x-4" />
           </div>
           <Label className="text-sm text-text-primary cursor-pointer">Snap to Grid</Label>
         </Switch>
@@ -228,7 +221,7 @@ export function PlacementPanel({
       </div>
 
       {/* Keyboard Shortcuts Hint */}
-      <div className="mt-2 p-3 bg-white/5 rounded border border-border-subtle">
+      <div className="p-3 bg-white/5 rounded border border-border-subtle">
         <div className="text-xs font-medium text-text-muted mb-2">Keyboard Shortcuts</div>
         <div className="flex flex-col gap-1 text-xs">
           <div className="flex justify-between">

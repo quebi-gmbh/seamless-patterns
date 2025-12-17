@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Modal, Dialog, Heading, Button, TextField, Label, Input } from 'react-aria-components'
+import { X } from 'lucide-react'
 
 interface ProjectExportDialogProps {
   isOpen: boolean
@@ -52,7 +53,7 @@ export function ProjectExportDialog({ isOpen, onClose, onExport }: ProjectExport
                 className="p-1.5 hover:bg-white/10 rounded transition-colors text-text-muted hover:text-text-primary"
                 aria-label="Close dialog"
               >
-                ✕
+                <X size={18} />
               </Button>
             </div>
 

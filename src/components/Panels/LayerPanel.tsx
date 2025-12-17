@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, ListBox, ListBoxItem, TextField, Input } from 'react-aria-components'
+import { Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, Trash2, Plus } from 'lucide-react'
 import type { LayerManager, Layer } from '../../core/LayerManager'
 
 interface LayerPanelProps {
@@ -92,10 +93,10 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
         <span className="text-sm font-medium text-text-primary">Layers</span>
         <Button
           onPress={handleCreateLayer}
-          className="px-3 py-1.5 bg-accent-teal hover:bg-accent-teal/90 rounded text-sm font-medium transition-colors"
+          className="p-1.5 bg-accent-teal hover:bg-accent-teal/90 rounded transition-colors"
           aria-label="Create new layer"
         >
-          +
+          <Plus size={16} />
         </Button>
       </div>
 
@@ -107,7 +108,7 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
           const key = Array.from(keys)[0]
           if (key) onLayerChange(key.toString())
         }}
-        className="flex flex-col gap-1 max-h-96 overflow-y-auto"
+        className="flex flex-col gap-1"
       >
         {layers.map((layer, index) => (
           <ListBoxItem
@@ -125,22 +126,22 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <Button
                 onPress={() => handleToggleVisibility(layer.id)}
-                className={`p-1 text-base hover:bg-white/10 rounded ${
+                className={`p-1 hover:bg-white/10 rounded ${
                   layer.visible ? '' : 'opacity-50'
                 }`}
                 aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
               >
-                {layer.visible ? '👁' : '👁‍🗨'}
+                {layer.visible ? <Eye size={16} /> : <EyeOff size={16} />}
               </Button>
 
               <Button
                 onPress={() => handleToggleLock(layer.id)}
-                className={`p-1 text-base hover:bg-white/10 rounded ${
+                className={`p-1 hover:bg-white/10 rounded ${
                   layer.locked ? 'text-accent-coral' : ''
                 }`}
                 aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
               >
-                {layer.locked ? '🔒' : '🔓'}
+                {layer.locked ? <Lock size={16} /> : <Unlock size={16} />}
               </Button>
             </div>
 
@@ -177,25 +178,25 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
               <Button
                 onPress={() => handleMoveUp(index)}
                 isDisabled={index === 0}
-                className="p-1 text-xs hover:bg-white/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1 hover:bg-white/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="Move layer up"
               >
-                ▲
+                <ChevronUp size={14} />
               </Button>
               <Button
                 onPress={() => handleMoveDown(index)}
                 isDisabled={index === layers.length - 1}
-                className="p-1 text-xs hover:bg-white/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1 hover:bg-white/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="Move layer down"
               >
-                ▼
+                <ChevronDown size={14} />
               </Button>
               <Button
                 onPress={() => handleDeleteLayer(layer.id)}
                 className="p-1 hover:bg-accent-coral/20 text-accent-coral rounded"
                 aria-label="Delete layer"
               >
-                🗑
+                <Trash2 size={14} />
               </Button>
             </div>
           </ListBoxItem>

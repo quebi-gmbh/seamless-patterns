@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Modal, Dialog, Heading, Button, Label, Slider, SliderTrack, SliderThumb, SliderOutput, Switch } from 'react-aria-components'
+import { X } from 'lucide-react'
 import type { Canvas as FabricCanvasType } from 'fabric'
 import { generateCenterTileSVG, rasterizeSVG, convertFormat, downloadFile } from '../../utils/svgExport'
 
@@ -183,7 +184,7 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
                 className="p-1.5 hover:bg-white/10 rounded transition-colors text-text-muted hover:text-text-primary"
                 aria-label="Close dialog"
               >
-                ✕
+                <X size={18} />
               </Button>
             </div>
 

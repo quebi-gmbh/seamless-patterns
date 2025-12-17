@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { Modal, Dialog, Heading, Button } from 'react-aria-components'
+import { X, FolderOpen } from 'lucide-react'
 
 interface ImportDialogProps {
   isOpen: boolean
@@ -60,7 +61,7 @@ export function ImportDialog({ isOpen, onClose, onImport }: ImportDialogProps) {
                 className="p-1.5 hover:bg-white/10 rounded transition-colors text-text-muted hover:text-text-primary"
                 aria-label="Close dialog"
               >
-                ✕
+                <X size={18} />
               </Button>
             </div>
 
@@ -72,7 +73,7 @@ export function ImportDialog({ isOpen, onClose, onImport }: ImportDialogProps) {
                 onClick={handleBrowseClick}
               >
                 <div className="flex flex-col items-center gap-3 text-center">
-                  <span className="text-4xl">📁</span>
+                  <FolderOpen size={48} className="text-text-muted" />
                   <p className="text-text-primary font-medium">Drop your file here</p>
                   <p className="text-sm text-text-muted">or</p>
                   <Button

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Modal, Dialog, Heading, Button, Label } from 'react-aria-components'
+import { X } from 'lucide-react'
 import { CodeEditor } from '../CodeEditor/CodeEditor'
 import { wrapSVGContent, validateSVGContent } from '../../utils/svgUtils'
 
@@ -81,7 +82,7 @@ export function SVGCodeDialog({ isOpen, onClose, onImport }: SVGCodeDialogProps)
                 className="p-1.5 hover:bg-white/10 rounded transition-colors text-text-muted hover:text-text-primary"
                 aria-label="Close dialog"
               >
-                ✕
+                <X size={18} />
               </Button>
             </div>
 

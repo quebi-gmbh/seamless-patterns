@@ -104,7 +104,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.fill as string || '#000000'}
           onChange={(e) => handleChange('fill', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer"
+          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
           aria-label="Fill color"
         />
       </div>
@@ -115,7 +115,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.stroke === 'transparent' ? '#000000' : properties.stroke as string || '#000000'}
           onChange={(e) => handleChange('stroke', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer"
+          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
           aria-label="Stroke color"
         />
       </div>
@@ -172,7 +172,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.fill as string || '#000000'}
           onChange={(e) => handleChange('fill', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer"
+          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
           aria-label="Fill color"
         />
       </div>
@@ -183,7 +183,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.stroke === 'transparent' ? '#000000' : properties.stroke as string || '#000000'}
           onChange={(e) => handleChange('stroke', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer"
+          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
           aria-label="Stroke color"
         />
       </div>
@@ -229,7 +229,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.fill === 'transparent' ? '#000000' : properties.fill as string || '#000000'}
           onChange={(e) => handleChange('fill', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer"
+          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
           aria-label="Fill color"
         />
       </div>
@@ -240,7 +240,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.stroke as string || '#000000'}
           onChange={(e) => handleChange('stroke', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer"
+          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
           aria-label="Stroke color"
         />
       </div>

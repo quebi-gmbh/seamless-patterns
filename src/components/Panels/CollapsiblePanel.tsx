@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { Disclosure, DisclosurePanel, Button } from 'react-aria-components'
+import { ChevronRight } from 'lucide-react'
 
 interface CollapsiblePanelProps {
   title: string
@@ -10,7 +11,7 @@ interface CollapsiblePanelProps {
 
 export function CollapsiblePanel({ title, children, defaultCollapsed = false, className = '' }: CollapsiblePanelProps) {
   return (
-    <Disclosure defaultExpanded={!defaultCollapsed} className={`bg-bg-panel backdrop-blur-sm rounded-lg border border-border-subtle mb-3 overflow-hidden ${className}`}>
+    <Disclosure defaultExpanded={!defaultCollapsed} className={`bg-bg-panel backdrop-blur-sm rounded-lg border border-border-subtle mb-3 ${className}`}>
       {({ isExpanded }) => (
         <>
           <Button
@@ -19,12 +20,10 @@ export function CollapsiblePanel({ title, children, defaultCollapsed = false, cl
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${title}`}
           >
             <span className="text-sm font-medium text-text-primary">{title}</span>
-            <span className="text-xs text-text-muted transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-              ▶
-            </span>
+            <ChevronRight size={16} className={`text-text-muted transition-transform duration-200 ${isExpanded ? 'rotate-90' : 'rotate-0'}`} />
           </Button>
           <DisclosurePanel>
-            <div className="px-4 pb-4 max-h-96 overflow-y-auto">
+            <div className="px-4 pb-4">
               {children}
             </div>
           </DisclosurePanel>

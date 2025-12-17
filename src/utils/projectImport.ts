@@ -2,6 +2,7 @@ import type { Canvas } from 'fabric'
 import { util as fabricUtil } from 'fabric'
 import type { LayerManager } from '../core/LayerManager'
 import type { TilingEngine } from '../core/TilingEngine'
+import type { EntityGroupManager } from '../core/EntityGroupManager'
 import type { ProjectData } from '../types/ProjectFormat'
 import type { ExtendedFabricObject } from '../types/FabricExtensions'
 
@@ -58,7 +59,8 @@ export async function deserializeProject(
   projectData: ProjectData,
   fabricCanvas: Canvas,
   layerManager: LayerManager,
-  tilingEngine: TilingEngine
+  tilingEngine: TilingEngine,
+  entityGroupManager?: EntityGroupManager | null
 ): Promise<void> {
   // Step 1: Validate
   if (!validateProjectData(projectData)) {
@@ -67,6 +69,7 @@ export async function deserializeProject(
 
   // Step 2: Clear existing state
   layerManager.clear()
+  entityGroupManager?.clear()
 
   // Step 3: Import layers
   const layers = projectData.layers.map(({ entities, ...layer }) => layer)
@@ -102,7 +105,9 @@ export async function deserializeProject(
         }
 
         // Recreate as tiled object using tilingEngine
-        await tilingEngine.createTiledObject(extObj, position, extObj.layerId!)
+        // Pass the original mirrorGroupId to preserve entity group references
+        const originalMirrorGroupId = entity.mirrorGroupId
+        await tilingEngine.createTiledObject(extObj, position, extObj.layerId!, originalMirrorGroupId)
       } catch (error) {
         console.error('Failed to import entity:', entity, error)
         // Continue with other entities even if one fails
@@ -110,7 +115,12 @@ export async function deserializeProject(
     }
   }
 
-  // Step 5: Request render
+  // Step 5: Restore entity groups
+  if (projectData.entityGroups && entityGroupManager) {
+    entityGroupManager.deserialize(projectData.entityGroups)
+  }
+
+  // Step 6: Request render
   fabricCanvas.requestRenderAll()
 }
 
@@ -121,7 +131,8 @@ export async function importProjectFromFile(
   file: File,
   fabricCanvas: Canvas,
   layerManager: LayerManager,
-  tilingEngine: TilingEngine
+  tilingEngine: TilingEngine,
+  entityGroupManager?: EntityGroupManager | null
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -131,7 +142,7 @@ export async function importProjectFromFile(
         const text = e.target?.result as string
         const projectData = JSON.parse(text)
 
-        await deserializeProject(projectData, fabricCanvas, layerManager, tilingEngine)
+        await deserializeProject(projectData, fabricCanvas, layerManager, tilingEngine, entityGroupManager)
         resolve()
       } catch (error) {
         if (error instanceof SyntaxError) {

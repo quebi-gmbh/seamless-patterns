@@ -19,6 +19,16 @@ export interface SerializedEntity {
 }
 
 /**
+ * Serialized entity group
+ */
+export interface SerializedEntityGroup {
+  id: string
+  name: string
+  memberMirrorGroupIds: string[]
+  layerId: string
+}
+
+/**
  * Layer with its entities
  */
 export interface SerializedLayer extends Layer {
@@ -33,4 +43,5 @@ export interface ProjectData {
   appVersion: string
   metadata: ProjectMetadata
   layers: SerializedLayer[]
+  entityGroups?: SerializedEntityGroup[]
 }

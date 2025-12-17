@@ -18,19 +18,21 @@ export class TilingEngine {
    * @param originalObject The Fabric object to tile
    * @param position The click position where the object was created
    * @param layerId Optional layer ID to assign to all objects
+   * @param existingMirrorGroupId Optional existing mirrorGroupId to preserve (for import)
    * @returns Array of all 25 objects
    */
   async createTiledObject(
     originalObject: FabricObject,
     position: { x: number; y: number },
-    layerId?: string
+    layerId?: string,
+    existingMirrorGroupId?: string
   ): Promise<ExtendedFabricObject[]> {
     // Calculate position within center tile using modulo
     // This normalizes the position to [0, tileSize) range
     const offsetX = ((position.x % this.tileSize) + this.tileSize) % this.tileSize
     const offsetY = ((position.y % this.tileSize) + this.tileSize) % this.tileSize
 
-    const mirrorGroupId = generateUniqueId('mirror_group')
+    const mirrorGroupId = existingMirrorGroupId || generateUniqueId('mirror_group')
     const allObjects: ExtendedFabricObject[] = []
 
     // Create 5x5 grid from (-2,-2) to (2,2)
@@ -137,49 +139,114 @@ export class TilingEngine {
    * Setup event listeners to sync transforms across all mirrored objects
    */
   private setupTransformSync(): void {
-    // Sync on object modification (after move, scale, rotate)
-    this.canvas.on('object:modified', (e) => {
-      const target = e.target
+    // Helper to sync all objects in target (handles both single objects and ActiveSelection)
+    const syncTarget = (target: any) => {
       if (!target) return
 
-      const extTarget = target as ExtendedFabricObject
-      if (!extTarget.tiledMetadata) return
+      // Check if it's an ActiveSelection (multiple objects selected)
+      if (target.type === 'activeselection') {
+        const selection = target
+        const objects = selection.getObjects() as ExtendedFabricObject[]
 
-      this.syncMirrorTransforms(extTarget)
+        // When multiple objects are selected (ActiveSelection), Fabric.js handles
+        // moving them together. We only need to sync the mirrors (25 tiled copies)
+        // for each selected object. We should NOT call syncEntityGroupTransforms
+        // because the group members are already in the selection and moving together.
+        objects.forEach((obj) => {
+          if (obj.tiledMetadata) {
+            // Use calcTransformMatrix() on the object to get its true canvas-relative position
+            // This works because Fabric.js objects in ActiveSelection know their absolute transform
+            const objMatrix = obj.calcTransformMatrix()
+            // The translation components are at indices 4 and 5
+            const absLeft = objMatrix[4]
+            const absTop = objMatrix[5]
+
+            this.syncMirrorTransformsOnly(obj, absLeft, absTop)
+          }
+        })
+      } else {
+        const extTarget = target as ExtendedFabricObject
+        if (extTarget.tiledMetadata) {
+          this.syncMirrorTransforms(extTarget)
+        }
+      }
+    }
+
+    // Sync on object modification (after move, scale, rotate)
+    this.canvas.on('object:modified', (e) => {
+      syncTarget(e.target)
     })
 
     // Sync during moving (real-time)
     this.canvas.on('object:moving', (e) => {
-      const target = e.target
-      if (!target) return
-
-      const extTarget = target as ExtendedFabricObject
-      if (!extTarget.tiledMetadata) return
-
-      this.syncMirrorTransforms(extTarget)
+      syncTarget(e.target)
     })
 
     // Sync during scaling
     this.canvas.on('object:scaling', (e) => {
-      const target = e.target
-      if (!target) return
-
-      const extTarget = target as ExtendedFabricObject
-      if (!extTarget.tiledMetadata) return
-
-      this.syncMirrorTransforms(extTarget)
+      syncTarget(e.target)
     })
 
     // Sync during rotating
     this.canvas.on('object:rotating', (e) => {
-      const target = e.target
-      if (!target) return
-
-      const extTarget = target as ExtendedFabricObject
-      if (!extTarget.tiledMetadata) return
-
-      this.syncMirrorTransforms(extTarget)
+      syncTarget(e.target)
     })
+  }
+
+  /**
+   * Sync mirror transforms only (no entity group sync) - used for ActiveSelection
+   * where Fabric.js already handles moving group members together
+   */
+  private syncMirrorTransformsOnly(sourceObject: ExtendedFabricObject, absCenterX: number, absCenterY: number): void {
+    if (!this.syncEnabled) return
+
+    const metadata = sourceObject.tiledMetadata
+    if (!metadata) return
+
+    const allTiledObjects = this.getMirrorsByGroupId(metadata.mirrorGroupId)
+
+    // Get the source object's original tile position from metadata
+    const [sourceTx, sourceTy] = metadata.tilePosition
+
+    // Calculate the source object's left/top from its center position
+    // The matrix gives us the center, but we need left/top for positioning mirrors
+    const sourceWidth = (sourceObject.width || 0) * (sourceObject.scaleX || 1)
+    const sourceHeight = (sourceObject.height || 0) * (sourceObject.scaleY || 1)
+    const sourceLeft = absCenterX - sourceWidth / 2
+    const sourceTop = absCenterY - sourceHeight / 2
+
+    // Update all other objects in the mirror group
+    allTiledObjects.forEach((obj) => {
+      if (obj === sourceObject) return
+
+      const [objTx, objTy] = obj.tiledMetadata!.tilePosition
+
+      // Calculate the tile offset between this object and the source
+      const tileOffsetX = objTx - sourceTx
+      const tileOffsetY = objTy - sourceTy
+
+      // Position this object at: source left/top + (tile offset * tile size)
+      const newLeft = sourceLeft + (tileOffsetX * this.tileSize)
+      const newTop = sourceTop + (tileOffsetY * this.tileSize)
+
+      // Apply all transforms
+      obj.set({
+        left: newLeft,
+        top: newTop,
+        scaleX: sourceObject.scaleX,
+        scaleY: sourceObject.scaleY,
+        angle: sourceObject.angle,
+        flipX: sourceObject.flipX,
+        flipY: sourceObject.flipY,
+        skewX: sourceObject.skewX,
+        skewY: sourceObject.skewY,
+      })
+
+      // Update control positions
+      obj.setCoords()
+    })
+
+    this.canvas.requestRenderAll()
   }
 
   /**

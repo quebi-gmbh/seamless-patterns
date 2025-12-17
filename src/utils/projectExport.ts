@@ -1,5 +1,6 @@
 import type { Canvas } from 'fabric'
 import type { LayerManager } from '../core/LayerManager'
+import type { EntityGroupManager } from '../core/EntityGroupManager'
 import type { ProjectData, SerializedLayer, SerializedEntity } from '../types/ProjectFormat'
 
 const APP_VERSION = '0.0.1'
@@ -11,7 +12,8 @@ const PROJECT_VERSION = '1.0.0'
 export function serializeProject(
   _fabricCanvas: Canvas,
   layerManager: LayerManager,
-  tileSize: number
+  tileSize: number,
+  entityGroupManager?: EntityGroupManager | null
 ): ProjectData {
   const now = new Date().toISOString()
   const layers = layerManager.getLayers()
@@ -34,6 +36,9 @@ export function serializeProject(
     }
   })
 
+  // Serialize entity groups
+  const entityGroups = entityGroupManager?.serialize() ?? []
+
   return {
     version: PROJECT_VERSION,
     appVersion: APP_VERSION,
@@ -43,6 +48,7 @@ export function serializeProject(
       modifiedAt: now,
     },
     layers: serializedLayers,
+    entityGroups,
   }
 }
 
@@ -53,9 +59,10 @@ export function exportProjectAsJSON(
   fabricCanvas: Canvas,
   layerManager: LayerManager,
   tileSize: number,
-  filename: string
+  filename: string,
+  entityGroupManager?: EntityGroupManager | null
 ): void {
-  const projectData = serializeProject(fabricCanvas, layerManager, tileSize)
+  const projectData = serializeProject(fabricCanvas, layerManager, tileSize, entityGroupManager)
   const jsonString = JSON.stringify(projectData, null, 2)
   const blob = new Blob([jsonString], { type: 'application/json' })
   const url = URL.createObjectURL(blob)

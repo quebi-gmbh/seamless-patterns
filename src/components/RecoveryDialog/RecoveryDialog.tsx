@@ -26,35 +26,35 @@ export function RecoveryDialog({ isOpen, onRecover, onDiscard }: RecoveryDialogP
       isOpen={isOpen}
       onOpenChange={(open) => !open && onDiscard()}
       isDismissable
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
     >
       <Dialog
-        className="relative w-full max-w-lg bg-bg-elevated border border-border-subtle rounded-lg shadow-2xl flex flex-col"
+        className="relative w-full max-w-lg bg-bg-elevated border border-primary/20 rounded-xl shadow-2xl flex flex-col panel-glow"
         aria-label="Recover Session"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
-          <Heading className="text-lg font-semibold text-text-primary">Recover Session</Heading>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-primary/10">
+          <Heading className="text-lg font-semibold text-white">Recover Session</Heading>
         </div>
 
         <div className="px-6 py-6 flex flex-col gap-3">
-          <p className="text-text-primary">A previous session was found. Would you like to recover it?</p>
+          <p className="text-white">A previous session was found. Would you like to recover it?</p>
           <p className="text-sm text-text-muted">
             Your last work was automatically saved and can be restored.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 px-6 py-4 border-t border-border-subtle">
+        <div className="flex flex-col gap-2 px-6 py-4 border-t border-primary/10">
           <div className="flex items-center justify-end gap-2">
             <Button
               onPress={onDiscard}
-              className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
+              className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-all hover:text-white border border-transparent hover:border-primary/20"
               aria-label="Discard session"
             >
               Discard
             </Button>
             <Button
               onPress={onRecover}
-              className="px-4 py-2 bg-accent-teal hover:bg-accent-teal/90 rounded text-sm font-medium transition-colors"
+              className="px-4 py-2 bg-primary hover:bg-primary-light rounded-lg text-sm font-medium transition-all text-bg-dark shadow-[0_0_15px_rgba(45,212,168,0.3)] hover:shadow-[0_0_20px_rgba(45,212,168,0.5)]"
               aria-label="Recover session"
             >
               Recover Session

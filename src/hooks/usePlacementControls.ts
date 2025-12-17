@@ -94,6 +94,23 @@ export function usePlacementControls({
   )
 
   /**
+   * Update object flip (mirror)
+   */
+  const updateFlip = useCallback(
+    (flipX: boolean, flipY: boolean) => {
+      if (!canvas || !selectedObject) return
+
+      selectedObject.set({ flipX, flipY })
+      selectedObject.setCoords()
+      canvas.requestRenderAll()
+
+      // Trigger object:modified event to sync mirrors
+      canvas.fire('object:modified', { target: selectedObject })
+    },
+    [canvas, selectedObject]
+  )
+
+  /**
    * Handle keyboard shortcuts for nudging objects
    */
   useEffect(() => {
@@ -152,6 +169,7 @@ export function usePlacementControls({
     updatePosition,
     updateRotation,
     updateScale,
+    updateFlip,
     snapValue,
   }
 }

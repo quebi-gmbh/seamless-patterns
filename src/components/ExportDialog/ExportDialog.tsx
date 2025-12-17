@@ -169,19 +169,19 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
       isOpen={isOpen}
       onOpenChange={(open) => !open && onClose()}
       isDismissable
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
     >
       <Dialog
-        className="relative w-full max-w-4xl max-h-[90vh] bg-bg-elevated border border-border-subtle rounded-lg shadow-2xl flex flex-col"
+        className="relative w-full max-w-4xl max-h-[90vh] bg-bg-elevated border border-primary/20 rounded-xl shadow-2xl flex flex-col panel-glow"
         aria-label="Export Tile"
       >
         {({ close }) => (
           <>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
-              <Heading className="text-lg font-semibold text-text-primary">Export Tile</Heading>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-primary/10">
+              <Heading className="text-lg font-semibold text-white">Export Tile</Heading>
               <Button
                 onPress={close}
-                className="p-1.5 hover:bg-white/10 rounded transition-colors text-text-muted hover:text-text-primary"
+                className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-text-muted hover:text-white"
                 aria-label="Close dialog"
               >
                 <X size={18} />
@@ -202,10 +202,10 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
                         key={size}
                         onPress={() => setResolution(size)}
                         isDisabled={format === 'svg'}
-                        className={`px-3 py-2 rounded text-sm transition-colors ${
+                        className={`px-3 py-2 rounded-lg text-sm transition-all ${
                           resolution === size
-                            ? 'bg-accent-teal/20 text-accent-teal'
-                            : 'bg-white/5 text-text-muted hover:bg-white/10'
+                            ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
+                            : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                         } disabled:opacity-30 disabled:cursor-not-allowed`}
                         aria-label={`Set resolution to ${size} pixels`}
                       >
@@ -223,10 +223,10 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
                       <Button
                         key={fmt}
                         onPress={() => setFormat(fmt)}
-                        className={`flex-1 px-3 py-2 rounded text-sm transition-colors ${
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm transition-all ${
                           format === fmt
-                            ? 'bg-accent-teal/20 text-accent-teal'
-                            : 'bg-white/5 text-text-muted hover:bg-white/10'
+                            ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
+                            : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                         }`}
                         aria-label={`Export as ${fmt.toUpperCase()}`}
                       >
@@ -235,12 +235,12 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
                     ))}
                   </div>
                   {format === 'jpeg' && (
-                    <div className="text-xs text-text-muted bg-white/5 p-2 rounded">
+                    <div className="text-xs text-text-muted bg-white/5 p-2 rounded-lg border border-primary/10">
                       Note: JPEG does not support transparency
                     </div>
                   )}
                   {format === 'svg' && (
-                    <div className="text-xs text-text-muted bg-white/5 p-2 rounded">
+                    <div className="text-xs text-text-muted bg-white/5 p-2 rounded-lg border border-primary/10">
                       SVG exports as scalable vector graphics
                     </div>
                   )}
@@ -263,8 +263,8 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
                         {({state}) => `${state.values[0]}%`}
                       </SliderOutput>
                     </div>
-                    <SliderTrack className="relative w-full h-2 bg-white/10 rounded">
-                      <SliderThumb className="h-4 w-4 bg-accent-teal rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-teal" />
+                    <SliderTrack className="relative w-full h-2 bg-white/10 rounded-lg">
+                      <SliderThumb className="h-4 w-4 bg-primary rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-[0_0_10px_rgba(45,212,168,0.4)] transition-all hover:scale-110" />
                     </SliderTrack>
                   </Slider>
                 )}
@@ -277,20 +277,20 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
                     onChange={setImageSmoothingEnabled}
                     className="group flex items-center gap-2"
                   >
-                    <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition group-data-selected:bg-accent-teal">
+                    <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition-all group-data-selected:bg-primary group-data-selected:shadow-[0_0_10px_rgba(45,212,168,0.3)]">
                       <span className="h-4 w-4 rounded-full bg-white transition group-data-selected:translate-x-4" />
                     </div>
-                    <Label className="text-sm text-text-primary cursor-pointer">Enable Antialiasing</Label>
+                    <Label className="text-sm text-white cursor-pointer">Enable Antialiasing</Label>
                   </Switch>
                   <Switch
                     isSelected={enableRetinaScaling}
                     onChange={setEnableRetinaScaling}
                     className="group flex items-center gap-2"
                   >
-                    <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition group-data-selected:bg-accent-teal">
+                    <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition-all group-data-selected:bg-primary group-data-selected:shadow-[0_0_10px_rgba(45,212,168,0.3)]">
                       <span className="h-4 w-4 rounded-full bg-white transition group-data-selected:translate-x-4" />
                     </div>
-                    <Label className="text-sm text-text-primary cursor-pointer">Enable Retina Scaling</Label>
+                    <Label className="text-sm text-white cursor-pointer">Enable Retina Scaling</Label>
                   </Switch>
                 </div>
               </div>
@@ -298,7 +298,7 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
               {/* Preview Panel */}
               <div className="w-80 flex flex-col gap-2">
                 <Label className="text-sm font-medium text-text-muted">Preview</Label>
-                <div className="aspect-square bg-white/5 border border-border-subtle rounded-lg overflow-hidden flex items-center justify-center">
+                <div className="aspect-square bg-white/5 border border-primary/20 rounded-xl overflow-hidden flex items-center justify-center">
                   {previewDataUrl ? (
                     <img
                       src={previewDataUrl}
@@ -317,11 +317,11 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 px-6 py-4 border-t border-border-subtle">
+            <div className="flex flex-col gap-2 px-6 py-4 border-t border-primary/10">
               <div className="flex items-center justify-end gap-2">
                 <Button
                   onPress={close}
-                  className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-all hover:text-white border border-transparent hover:border-primary/20"
                   aria-label="Cancel"
                 >
                   Cancel
@@ -329,7 +329,7 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
                 <Button
                   onPress={handleExport}
                   isDisabled={isExporting}
-                  className="px-4 py-2 bg-accent-teal hover:bg-accent-teal/90 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-primary hover:bg-primary-light rounded-lg text-sm font-medium transition-all text-bg-dark shadow-[0_0_15px_rgba(45,212,168,0.3)] hover:shadow-[0_0_20px_rgba(45,212,168,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label={isExporting ? 'Exporting...' : 'Export tile'}
                 >
                   {isExporting ? 'Exporting...' : 'Export'}

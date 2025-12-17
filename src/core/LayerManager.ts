@@ -2,6 +2,7 @@ import type { Canvas } from 'fabric'
 import type { ExtendedFabricObject } from '../types/FabricExtensions'
 import { generateUniqueId } from '../utils/idGenerator'
 import { extractSVGInnerContent } from '../utils/svgUtils'
+import type { CanonicalObjectStore } from './CanonicalObjectStore'
 
 export interface Layer {
   id: string
@@ -16,6 +17,9 @@ export class LayerManager {
   private layers: Map<string, Layer> = new Map()
   private defaultLayerId: string
 
+  // Optional canonical store for virtual tiling mode
+  private canonicalStore: CanonicalObjectStore | null = null
+
   constructor(canvas: Canvas) {
     this.canvas = canvas
 
@@ -28,6 +32,34 @@ export class LayerManager {
       locked: false,
       order: 0,
     })
+  }
+
+  /**
+   * Set the canonical store for virtual tiling mode
+   */
+  setCanonicalStore(store: CanonicalObjectStore): void {
+    this.canonicalStore = store
+  }
+
+  /**
+   * Check if virtual tiling mode is enabled
+   */
+  isVirtualTilingEnabled(): boolean {
+    return this.canonicalStore !== null
+  }
+
+  /**
+   * Get all tiled objects - from canonical store if available, otherwise from canvas
+   */
+  private getAllTiledObjects(): ExtendedFabricObject[] {
+    if (this.canonicalStore) {
+      return this.canonicalStore.getAll()
+    }
+    // Legacy mode: filter canvas objects
+    return this.canvas.getObjects().filter((obj) => {
+      const extObj = obj as ExtendedFabricObject
+      return extObj.tiledMetadata && !(extObj as any).gridLine
+    }) as ExtendedFabricObject[]
   }
 
   /**
@@ -153,18 +185,21 @@ export class LayerManager {
 
   /**
    * Get all unique mirror groups (returns one object per tiled group)
+   * In virtual tiling mode, each group has exactly 1 object (the canonical)
    */
   getMirrorGroups(): Map<string, ExtendedFabricObject[]> {
     const groups = new Map<string, ExtendedFabricObject[]>()
 
-    this.canvas.getObjects().forEach((obj) => {
-      const extObj = obj as ExtendedFabricObject
-      if (extObj.tiledMetadata?.mirrorGroupId && !(extObj as any).gridLine) {
-        const groupId = extObj.tiledMetadata.mirrorGroupId
+    // Use canonical store if available, otherwise query canvas
+    const objects = this.getAllTiledObjects()
+
+    objects.forEach((obj) => {
+      if (obj.tiledMetadata?.mirrorGroupId) {
+        const groupId = obj.tiledMetadata.mirrorGroupId
         if (!groups.has(groupId)) {
           groups.set(groupId, [])
         }
-        groups.get(groupId)!.push(extObj)
+        groups.get(groupId)!.push(obj)
       }
     })
 
@@ -175,12 +210,21 @@ export class LayerManager {
    * Delete all objects in a mirror group
    */
   deleteMirrorGroup(mirrorGroupId: string): void {
-    const objects = this.canvas.getObjects().filter((obj) => {
-      const extObj = obj as ExtendedFabricObject
-      return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
-    })
-
-    objects.forEach((obj) => this.canvas.remove(obj))
+    if (this.canonicalStore) {
+      // Virtual tiling mode: remove from store and canvas
+      const obj = this.canonicalStore.get(mirrorGroupId)
+      if (obj) {
+        this.canvas.remove(obj)
+        this.canonicalStore.remove(mirrorGroupId)
+      }
+    } else {
+      // Legacy mode: remove all 25 copies from canvas
+      const objects = this.canvas.getObjects().filter((obj) => {
+        const extObj = obj as ExtendedFabricObject
+        return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
+      })
+      objects.forEach((obj) => this.canvas.remove(obj))
+    }
     this.canvas.requestRenderAll()
   }
 
@@ -188,12 +232,19 @@ export class LayerManager {
    * Bring mirror group forward (z-index)
    */
   bringMirrorGroupForward(mirrorGroupId: string): void {
-    const objects = this.canvas.getObjects().filter((obj) => {
-      const extObj = obj as ExtendedFabricObject
-      return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
-    })
-
-    objects.forEach((obj) => this.canvas.bringObjectForward(obj))
+    if (this.canonicalStore) {
+      // Virtual tiling mode: update store z-order and canvas
+      this.canonicalStore.bringForward(mirrorGroupId)
+      const obj = this.canonicalStore.get(mirrorGroupId)
+      if (obj) this.canvas.bringObjectForward(obj)
+    } else {
+      // Legacy mode
+      const objects = this.canvas.getObjects().filter((obj) => {
+        const extObj = obj as ExtendedFabricObject
+        return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
+      })
+      objects.forEach((obj) => this.canvas.bringObjectForward(obj))
+    }
     this.canvas.requestRenderAll()
   }
 
@@ -201,12 +252,19 @@ export class LayerManager {
    * Send mirror group backward (z-index)
    */
   sendMirrorGroupBackward(mirrorGroupId: string): void {
-    const objects = this.canvas.getObjects().filter((obj) => {
-      const extObj = obj as ExtendedFabricObject
-      return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
-    })
-
-    objects.forEach((obj) => this.canvas.sendObjectBackwards(obj))
+    if (this.canonicalStore) {
+      // Virtual tiling mode: update store z-order and canvas
+      this.canonicalStore.sendBackward(mirrorGroupId)
+      const obj = this.canonicalStore.get(mirrorGroupId)
+      if (obj) this.canvas.sendObjectBackwards(obj)
+    } else {
+      // Legacy mode
+      const objects = this.canvas.getObjects().filter((obj) => {
+        const extObj = obj as ExtendedFabricObject
+        return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
+      })
+      objects.forEach((obj) => this.canvas.sendObjectBackwards(obj))
+    }
     this.canvas.requestRenderAll()
   }
 
@@ -214,12 +272,19 @@ export class LayerManager {
    * Bring mirror group to front
    */
   bringMirrorGroupToFront(mirrorGroupId: string): void {
-    const objects = this.canvas.getObjects().filter((obj) => {
-      const extObj = obj as ExtendedFabricObject
-      return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
-    })
-
-    objects.forEach((obj) => this.canvas.bringObjectToFront(obj))
+    if (this.canonicalStore) {
+      // Virtual tiling mode: update store z-order and canvas
+      this.canonicalStore.bringToFront(mirrorGroupId)
+      const obj = this.canonicalStore.get(mirrorGroupId)
+      if (obj) this.canvas.bringObjectToFront(obj)
+    } else {
+      // Legacy mode
+      const objects = this.canvas.getObjects().filter((obj) => {
+        const extObj = obj as ExtendedFabricObject
+        return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
+      })
+      objects.forEach((obj) => this.canvas.bringObjectToFront(obj))
+    }
     this.canvas.requestRenderAll()
   }
 
@@ -227,19 +292,33 @@ export class LayerManager {
    * Send mirror group to back
    */
   sendMirrorGroupToBack(mirrorGroupId: string): void {
-    const objects = this.canvas.getObjects().filter((obj) => {
-      const extObj = obj as ExtendedFabricObject
-      return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
-    })
-
-    objects.forEach((obj) => this.canvas.sendObjectToBack(obj))
+    if (this.canonicalStore) {
+      // Virtual tiling mode: update store z-order and canvas
+      this.canonicalStore.sendToBack(mirrorGroupId)
+      const obj = this.canonicalStore.get(mirrorGroupId)
+      if (obj) this.canvas.sendObjectToBack(obj)
+    } else {
+      // Legacy mode
+      const objects = this.canvas.getObjects().filter((obj) => {
+        const extObj = obj as ExtendedFabricObject
+        return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
+      })
+      objects.forEach((obj) => this.canvas.sendObjectToBack(obj))
+    }
     this.canvas.requestRenderAll()
   }
 
   /**
    * Get objects by mirror group ID
+   * In virtual tiling mode, returns array with single canonical object
    */
   getObjectsByMirrorGroup(mirrorGroupId: string): ExtendedFabricObject[] {
+    if (this.canonicalStore) {
+      // Virtual tiling mode: return single canonical object
+      const obj = this.canonicalStore.get(mirrorGroupId)
+      return obj ? [obj] : []
+    }
+    // Legacy mode: return all 25 copies
     return this.canvas.getObjects().filter((obj) => {
       const extObj = obj as ExtendedFabricObject
       return extObj.tiledMetadata?.mirrorGroupId === mirrorGroupId
@@ -274,8 +353,14 @@ export class LayerManager {
   /**
    * Get only center tile objects (tilePosition [0,0]) for a specific layer
    * Used for export to avoid redundancy
+   * In virtual tiling mode, all objects are canonical (tilePosition [0,0])
    */
   getCenterTileObjectsByLayer(layerId: string): ExtendedFabricObject[] {
+    if (this.canonicalStore) {
+      // Virtual tiling mode: all objects are canonical (center tile)
+      return this.canonicalStore.getByLayer(layerId)
+    }
+    // Legacy mode: filter to center tile only
     return this.getObjectsByLayer(layerId).filter((obj) =>
       obj.tiledMetadata?.tilePosition?.[0] === 0 &&
       obj.tiledMetadata?.tilePosition?.[1] === 0
@@ -287,6 +372,11 @@ export class LayerManager {
    * Used for project import
    */
   clear(): void {
+    // Clear canonical store if in virtual tiling mode
+    if (this.canonicalStore) {
+      this.canonicalStore.clear()
+    }
+
     // Remove all objects except grid lines
     const objects = this.canvas.getObjects().filter((obj: any) => !obj.gridLine)
     objects.forEach((obj) => this.canvas.remove(obj))

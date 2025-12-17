@@ -22,6 +22,7 @@ import { usePlacementControls } from './hooks/usePlacementControls'
 import { LayerManager } from './core/LayerManager'
 import { EntityGroupManager } from './core/EntityGroupManager'
 import type { ExtendedFabricObject } from './types/FabricExtensions'
+import type { VirtualTilingContext } from './hooks/useFabricCanvas'
 import { exportProjectAsJSON, serializeProject } from './utils/projectExport'
 import { importProjectFromFile, deserializeProject } from './utils/projectImport'
 import { hasAutosave, loadFromLocalStorage, saveToLocalStorage, clearAutosave } from './utils/autoSave'
@@ -38,6 +39,7 @@ function App() {
   const [brushSize, setBrushSize] = useState(8)
   const [color, setColor] = useState('#ff6b6b')
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvasType | null>(null)
+  const [virtualTilingContext, setVirtualTilingContext] = useState<VirtualTilingContext | null>(null)
   const tilingEngine = useTilingEngine(fabricCanvas, DRAWING_TILE_SIZE)
   const [isDrawingShape, setIsDrawingShape] = useState(false)
   const [shapeStart, setShapeStart] = useState<{ x: number; y: number } | null>(null)
@@ -69,6 +71,12 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(3)
   const [followMode, setFollowMode] = useState<'cursor' | 'object' | 'manual'>('cursor')
 
+  // Handle canvas ready callback
+  const handleCanvasReady = useCallback((canvas: FabricCanvasType, vtContext: VirtualTilingContext) => {
+    setFabricCanvas(canvas)
+    setVirtualTilingContext(vtContext)
+  }, [])
+
   // Initialize LayerManager and EntityGroupManager when canvas is ready
   useEffect(() => {
     if (!fabricCanvas || layerManager) return
@@ -80,6 +88,22 @@ function App() {
     const groupManager = new EntityGroupManager(fabricCanvas, manager)
     setEntityGroupManager(groupManager)
   }, [fabricCanvas, layerManager])
+
+  // Enable virtual tiling on TilingEngine and LayerManager when context is ready
+  useEffect(() => {
+    if (!tilingEngine || !virtualTilingContext?.selectionProxyManager) return
+
+    const { canonicalStore, selectionProxyManager, hitTestInterceptor } = virtualTilingContext
+
+    // Enable virtual tiling mode on TilingEngine
+    tilingEngine.enableVirtualTiling(canonicalStore, selectionProxyManager)
+
+    // Enable virtual tiling mode on LayerManager
+    if (layerManager) {
+      layerManager.setCanonicalStore(canonicalStore)
+      hitTestInterceptor.setLayerManager(layerManager)
+    }
+  }, [tilingEngine, virtualTilingContext, layerManager])
 
   // Auto-save function with debounce
   const triggerAutoSave = useCallback(() => {
@@ -102,7 +126,7 @@ function App() {
   }, [fabricCanvas, layerManager, entityGroupManager])
 
   // Use placement controls hook
-  const { updatePosition, updateRotation, updateScale } = usePlacementControls({
+  const { updatePosition, updateRotation, updateScale, updateFlip } = usePlacementControls({
     canvas: fabricCanvas,
     selectedObject,
     snapToGrid,
@@ -167,7 +191,11 @@ function App() {
 
       // Create tiled version with the clone
       console.log('Creating tiled object with layerId:', currentLayerId)
-      await tilingEngine.createTiledObject(pathClone, position, currentLayerId)
+      if (tilingEngine.isVirtualTilingEnabled()) {
+        await tilingEngine.createCanonicalObject(pathClone, position, currentLayerId)
+      } else {
+        await tilingEngine.createTiledObject(pathClone, position, currentLayerId)
+      }
 
       // Request render to show the tiled paths
       fabricCanvas.requestRenderAll()
@@ -201,7 +229,29 @@ function App() {
       const newSelectedIds = new Set<string>()
       let hasEntityGroup = false
 
-      selected.forEach((obj) => {
+      selected.forEach((obj: any) => {
+        // Handle proxy objects in virtual tiling mode
+        if (obj?.proxyMetadata?.isProxy) {
+          const mirrorGroupId = obj.proxyMetadata.mirrorGroupId
+          // Get the canonical object to check for entity groups
+          const canonical = virtualTilingContext?.canonicalStore.get(mirrorGroupId)
+          if (canonical?.tiledMetadata?.entityGroupId && entityGroupManager) {
+            hasEntityGroup = true
+            const group = entityGroupManager.getGroup(canonical.tiledMetadata.entityGroupId)
+            if (group) {
+              group.memberMirrorGroupIds.forEach((id) => newSelectedIds.add(id))
+            }
+          } else {
+            newSelectedIds.add(mirrorGroupId)
+          }
+          // Set canonical object for placement panel
+          if (canonical) {
+            setSelectedObject(canonical)
+          }
+          return
+        }
+
+        // Handle regular tiled objects (legacy mode)
         if (obj?.tiledMetadata?.mirrorGroupId) {
           const mirrorGroupId = obj.tiledMetadata.mirrorGroupId
 
@@ -228,7 +278,7 @@ function App() {
           const objects = layerManager.getObjectsByMirrorGroup(mirrorGroupId)
           // Find center tile object (position [0,0])
           const centerTile = objects.find(
-            (obj) => obj.tiledMetadata?.tilePosition[0] === 0 && obj.tiledMetadata?.tilePosition[1] === 0
+            (obj) => obj.tiledMetadata?.tilePosition?.[0] === 0 && obj.tiledMetadata?.tilePosition?.[1] === 0
           )
           if (centerTile) {
             objectsToSelect.push(centerTile)
@@ -243,9 +293,9 @@ function App() {
         }
       }
 
-      // Set the first selected object for placement panel
-      if (selected[0]) {
-        setSelectedObject(selected[0])
+      // Set the first selected object for placement panel (only if not already set by proxy handling)
+      if (selected[0] && !selectedObject) {
+        setSelectedObject(selected[0] as ExtendedFabricObject)
       }
     }
 
@@ -263,7 +313,26 @@ function App() {
 
       const newSelectedIds = new Set<string>()
 
-      selected.forEach((obj) => {
+      selected.forEach((obj: any) => {
+        // Handle proxy objects in virtual tiling mode
+        if (obj?.proxyMetadata?.isProxy) {
+          const mirrorGroupId = obj.proxyMetadata.mirrorGroupId
+          const canonical = virtualTilingContext?.canonicalStore.get(mirrorGroupId)
+          if (canonical?.tiledMetadata?.entityGroupId && entityGroupManager) {
+            const group = entityGroupManager.getGroup(canonical.tiledMetadata.entityGroupId)
+            if (group) {
+              group.memberMirrorGroupIds.forEach((id) => newSelectedIds.add(id))
+            }
+          } else {
+            newSelectedIds.add(mirrorGroupId)
+          }
+          if (canonical) {
+            setSelectedObject(canonical)
+          }
+          return
+        }
+
+        // Handle regular tiled objects (legacy mode)
         if (obj?.tiledMetadata?.mirrorGroupId) {
           const mirrorGroupId = obj.tiledMetadata.mirrorGroupId
 
@@ -282,14 +351,20 @@ function App() {
 
       setSelectedEntityIds(newSelectedIds)
       // Set the first selected object for placement panel
-      if (selected[0]) {
-        setSelectedObject(selected[0])
+      if (selected[0] && !(selected[0] as any)?.proxyMetadata?.isProxy) {
+        setSelectedObject(selected[0] as ExtendedFabricObject)
       }
     }
 
     const handleSelectionCleared = () => {
       setSelectedEntityIds(new Set())
       setSelectedObject(null)
+
+      // Clear proxies in virtual tiling mode
+      if (virtualTilingContext?.selectionProxyManager) {
+        virtualTilingContext.selectionProxyManager.clearAll()
+        fabricCanvas.requestRenderAll()
+      }
     }
 
     fabricCanvas.on('selection:created', handleSelectionCreated)
@@ -301,7 +376,7 @@ function App() {
       fabricCanvas.off('selection:updated', handleSelectionUpdated)
       fabricCanvas.off('selection:cleared', handleSelectionCleared)
     }
-  }, [fabricCanvas, entityGroupManager])
+  }, [fabricCanvas, entityGroupManager, virtualTilingContext, layerManager, selectedObject])
 
   // Track object modifications to update placement panel
   useEffect(() => {
@@ -323,6 +398,49 @@ function App() {
       fabricCanvas.off('object:rotating', handleObjectModified)
     }
   }, [fabricCanvas])
+
+  // Virtual tiling hit testing - intercept clicks on canvas to select canonical objects via proxies
+  useEffect(() => {
+    if (!fabricCanvas || !virtualTilingContext?.hitTestInterceptor || !virtualTilingContext?.selectionProxyManager) return
+    if (tool !== 'select') return
+
+    const { hitTestInterceptor, selectionProxyManager } = virtualTilingContext
+
+    const handleMouseDown = (e: any) => {
+      // Skip if Fabric.js already found a target (like an existing proxy)
+      if (e.target) return
+
+      // Get click point
+      const pointer = fabricCanvas.getViewportPoint(e.e)
+
+      // Perform hit test against canonical objects at all tile positions
+      const hitResult = hitTestInterceptor.findCanonicalObjectAtPoint(pointer)
+
+      if (hitResult) {
+        const { canonicalObject, tileOffset } = hitResult
+
+        // Clear existing proxies
+        selectionProxyManager.clearAll()
+
+        // Create proxy at the clicked tile offset
+        const proxy = selectionProxyManager.createProxy(canonicalObject, tileOffset)
+
+        // Select the proxy
+        fabricCanvas.setActiveObject(proxy)
+        fabricCanvas.requestRenderAll()
+
+        // Prevent Fabric from continuing with its default handling
+        e.e.preventDefault?.()
+        e.e.stopPropagation?.()
+      }
+    }
+
+    fabricCanvas.on('mouse:down', handleMouseDown)
+
+    return () => {
+      fabricCanvas.off('mouse:down', handleMouseDown)
+    }
+  }, [fabricCanvas, virtualTilingContext, tool])
 
   // Handle shape drawing (rectangle, circle)
   useEffect(() => {
@@ -406,7 +524,11 @@ function App() {
           stroke: color,
           strokeWidth: 2,
         })
-        await tilingEngine.createTiledObject(rect, { x: tempShape.left, y: tempShape.top }, currentLayerId)
+        if (tilingEngine.isVirtualTilingEnabled()) {
+          await tilingEngine.createCanonicalObject(rect, { x: tempShape.left, y: tempShape.top }, currentLayerId)
+        } else {
+          await tilingEngine.createTiledObject(rect, { x: tempShape.left, y: tempShape.top }, currentLayerId)
+        }
       } else if (tool === 'circle' && tempShape.radius > 5) {
         const circle = new Circle({
           left: tempShape.left,
@@ -416,7 +538,11 @@ function App() {
           stroke: color,
           strokeWidth: 2,
         })
-        await tilingEngine.createTiledObject(circle, { x: tempShape.left, y: tempShape.top }, currentLayerId)
+        if (tilingEngine.isVirtualTilingEnabled()) {
+          await tilingEngine.createCanonicalObject(circle, { x: tempShape.left, y: tempShape.top }, currentLayerId)
+        } else {
+          await tilingEngine.createTiledObject(circle, { x: tempShape.left, y: tempShape.top }, currentLayerId)
+        }
       }
 
       setIsDrawingShape(false)
@@ -436,7 +562,8 @@ function App() {
   }, [fabricCanvas, tilingEngine, tool, color, isDrawingShape, shapeStart, tempShape, currentLayerId])
 
   // Update tile preview from Fabric canvas
-  const updateTileFromFabric = useCallback(() => {
+  // Called via onAfterRender callback AFTER virtual copies are drawn
+  const updateTilePreview = useCallback(() => {
     if (!fabricCanvas) return
 
     const tileCanvas = tileCanvasRef.current
@@ -445,51 +572,27 @@ function App() {
     const tileCtx = tileCanvas.getContext('2d')
     if (!tileCtx) return
 
-    // Export Fabric canvas to image
-    const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
-    const img = new Image()
-    img.onload = () => {
-      // Extract center tile
-      tileCtx.clearRect(0, 0, DRAWING_TILE_SIZE, DRAWING_TILE_SIZE)
-      tileCtx.drawImage(
-        img,
-        DRAWING_TILE_SIZE, DRAWING_TILE_SIZE, DRAWING_TILE_SIZE, DRAWING_TILE_SIZE, // Source: center tile from 768px canvas
-        0, 0, DRAWING_TILE_SIZE, DRAWING_TILE_SIZE // Destination: same size for preview
-      )
-    }
-    img.src = dataURL
+    // Get the underlying HTML canvas element
+    // At this point, after:render has completed and virtual copies are drawn
+    const sourceCanvas = fabricCanvas.getElement()
+
+    // Account for devicePixelRatio - Fabric.js scales the canvas buffer
+    // for retina displays, so we need to scale our extraction coordinates
+    const retinaScaling = fabricCanvas.getRetinaScaling()
+    const scaledTileSize = DRAWING_TILE_SIZE * retinaScaling
+
+    // Extract center tile from the canvas
+    // Center tile is at (tileSize, tileSize) to (2*tileSize, 2*tileSize) in logical coords
+    // But the canvas buffer is scaled by retinaScaling
+    tileCtx.clearRect(0, 0, DRAWING_TILE_SIZE, DRAWING_TILE_SIZE)
+    tileCtx.drawImage(
+      sourceCanvas,
+      scaledTileSize, scaledTileSize,        // Source x, y (scaled for retina)
+      scaledTileSize, scaledTileSize,        // Source width, height (scaled for retina)
+      0, 0,                                   // Dest x, y
+      DRAWING_TILE_SIZE, DRAWING_TILE_SIZE   // Dest width, height
+    )
   }, [fabricCanvas])
-
-  // Update preview when canvas changes
-  useEffect(() => {
-    if (!fabricCanvas) return
-
-    const handleObjectModified = () => {
-      updateTileFromFabric()
-    }
-
-    // Listen to all relevant events for live preview
-    fabricCanvas.on('object:modified', handleObjectModified)
-    fabricCanvas.on('object:added', handleObjectModified)
-    fabricCanvas.on('object:removed', handleObjectModified)
-    fabricCanvas.on('path:created', handleObjectModified)
-    fabricCanvas.on('object:moving', handleObjectModified)
-    fabricCanvas.on('object:scaling', handleObjectModified)
-    fabricCanvas.on('object:rotating', handleObjectModified)
-
-    // Initial update
-    updateTileFromFabric()
-
-    return () => {
-      fabricCanvas.off('object:modified', handleObjectModified)
-      fabricCanvas.off('object:added', handleObjectModified)
-      fabricCanvas.off('object:removed', handleObjectModified)
-      fabricCanvas.off('path:created', handleObjectModified)
-      fabricCanvas.off('object:moving', handleObjectModified)
-      fabricCanvas.off('object:scaling', handleObjectModified)
-      fabricCanvas.off('object:rotating', handleObjectModified)
-    }
-  }, [fabricCanvas, updateTileFromFabric])
 
   // Check for auto-save on mount
   useEffect(() => {
@@ -562,6 +665,21 @@ function App() {
   const clearCanvas = () => {
     if (!fabricCanvas) return
 
+    // Clear canonical store in virtual tiling mode
+    if (virtualTilingContext?.canonicalStore) {
+      virtualTilingContext.canonicalStore.clear()
+    }
+
+    // Clear selection proxies
+    if (virtualTilingContext?.selectionProxyManager) {
+      virtualTilingContext.selectionProxyManager.clearAll()
+    }
+
+    // Clear entity groups
+    if (entityGroupManager) {
+      entityGroupManager.clear()
+    }
+
     // Remove all objects except grid lines
     const objects = fabricCanvas.getObjects().filter((obj: any) => !obj.gridLine)
     objects.forEach((obj) => fabricCanvas.remove(obj))
@@ -576,6 +694,10 @@ function App() {
         ctx.fillRect(0, 0, DRAWING_TILE_SIZE, DRAWING_TILE_SIZE)
       }
     }
+
+    // Clear selection state
+    setSelectedEntityIds(new Set())
+    setSelectedObject(null)
   }
 
   const handleExportClick = () => {
@@ -633,7 +755,11 @@ function App() {
         const scale = maxSize / Math.max(svgGroup.width!, svgGroup.height!)
         svgGroup.scale(scale)
       }
-      await tilingEngine.createTiledObject(svgGroup, basePosition, currentLayerId)
+      if (tilingEngine.isVirtualTilingEnabled()) {
+        await tilingEngine.createCanonicalObject(svgGroup, basePosition, currentLayerId)
+      } else {
+        await tilingEngine.createTiledObject(svgGroup, basePosition, currentLayerId)
+      }
       fabricCanvas.requestRenderAll()
       return
     }
@@ -651,25 +777,36 @@ function App() {
 
     const createdMirrorGroupIds: string[] = []
 
-    for (const obj of objects) {
-      // Clone the object to avoid mutation issues
-      const cloned = await obj.clone()
+    // Phase 1: Clone all objects in parallel
+    const clonePromises = objects.map(obj => obj.clone())
+    const clonedObjects = await Promise.all(clonePromises)
+
+    // Phase 2: Create tiled objects sequentially for z-order
+    for (let i = 0; i < clonedObjects.length; i++) {
+      const cloned = clonedObjects[i]
+      const original = objects[i]
 
       // Scale the object
       cloned.scale((cloned.scaleX || 1) * scale)
 
       // Position relative to center tile, accounting for SVG viewBox offset
-      const objLeft = (cloned.left || 0) - offsetX
-      const objTop = (cloned.top || 0) - offsetY
+      // Use original's position since clone may have different left/top after clone
+      const objLeft = (original.left || 0) - offsetX
+      const objTop = (original.top || 0) - offsetY
       const position = {
         x: basePosition.x + objLeft * scale,
         y: basePosition.y + objTop * scale
       }
 
       // Create tiled object and capture its mirrorGroupId
-      const tiledObjects = await tilingEngine.createTiledObject(cloned, position, currentLayerId)
-      if (tiledObjects.length > 0 && tiledObjects[0].tiledMetadata?.mirrorGroupId) {
-        createdMirrorGroupIds.push(tiledObjects[0].tiledMetadata.mirrorGroupId)
+      if (tilingEngine.isVirtualTilingEnabled()) {
+        const mirrorGroupId = await tilingEngine.createCanonicalObject(cloned, position, currentLayerId)
+        createdMirrorGroupIds.push(mirrorGroupId)
+      } else {
+        const tiledObjects = await tilingEngine.createTiledObject(cloned, position, currentLayerId)
+        if (tiledObjects.length > 0 && tiledObjects[0].tiledMetadata?.mirrorGroupId) {
+          createdMirrorGroupIds.push(tiledObjects[0].tiledMetadata.mirrorGroupId)
+        }
       }
     }
 
@@ -709,7 +846,11 @@ function App() {
 
           // Position at center of center tile
           const position = { x: DRAWING_TILE_SIZE * 1.5, y: DRAWING_TILE_SIZE * 1.5 }
-          await tilingEngine.createTiledObject(img, position, currentLayerId)
+          if (tilingEngine.isVirtualTilingEnabled()) {
+            await tilingEngine.createCanonicalObject(img, position, currentLayerId)
+          } else {
+            await tilingEngine.createTiledObject(img, position, currentLayerId)
+          }
           fabricCanvas.requestRenderAll()
         })
       }
@@ -749,7 +890,11 @@ function App() {
     }
 
     // Create tiled version with the same layer
-    await tilingEngine.createTiledObject(cloned, position, firstObj.layerId)
+    if (tilingEngine.isVirtualTilingEnabled()) {
+      await tilingEngine.createCanonicalObject(cloned, position, firstObj.layerId)
+    } else {
+      await tilingEngine.createTiledObject(cloned, position, firstObj.layerId)
+    }
     fabricCanvas.requestRenderAll()
   }
 
@@ -818,33 +963,52 @@ function App() {
     // Switch to select tool
     setTool('select')
 
-    // Get the objects in this group
+    // Get the canonical object for this group
     const objects = layerManager.getObjectsByMirrorGroup(mirrorGroupId)
     if (objects.length === 0) return
 
-    // Find the object closest to the center of the canvas
-    const canvasCenter = { x: fabricCanvas.width! / 2, y: fabricCanvas.height! / 2 }
-    let closestObject = objects[0]
-    let minDistance = Number.MAX_VALUE
+    const canonical = objects[0]
 
-    objects.forEach((obj) => {
-      const objCenterX = (obj.left || 0) + ((obj.width || 0) * (obj.scaleX || 1)) / 2
-      const objCenterY = (obj.top || 0) + ((obj.height || 0) * (obj.scaleY || 1)) / 2
-      const distance = Math.sqrt(
-        Math.pow(objCenterX - canvasCenter.x, 2) +
-        Math.pow(objCenterY - canvasCenter.y, 2)
-      )
+    // In virtual tiling mode, create a proxy at center tile and select it
+    if (virtualTilingContext?.selectionProxyManager) {
+      const { selectionProxyManager } = virtualTilingContext
 
-      if (distance < minDistance) {
-        minDistance = distance
-        closestObject = obj
-      }
-    })
+      // Clear any existing proxies first
+      selectionProxyManager.clearAll()
 
-    // Select the object closest to center
-    fabricCanvas.discardActiveObject()
-    fabricCanvas.setActiveObject(closestObject)
-    fabricCanvas.requestRenderAll()
+      // Create proxy at center tile [0,0]
+      const proxy = selectionProxyManager.createProxy(canonical, [0, 0])
+
+      // Select the proxy
+      fabricCanvas.discardActiveObject()
+      fabricCanvas.setActiveObject(proxy)
+      fabricCanvas.requestRenderAll()
+    } else {
+      // Legacy mode - select the object directly (for non-virtual tiling)
+      // Find the object closest to the center of the canvas
+      const canvasCenter = { x: fabricCanvas.width! / 2, y: fabricCanvas.height! / 2 }
+      let closestObject = objects[0]
+      let minDistance = Number.MAX_VALUE
+
+      objects.forEach((obj) => {
+        const objCenterX = (obj.left || 0) + ((obj.width || 0) * (obj.scaleX || 1)) / 2
+        const objCenterY = (obj.top || 0) + ((obj.height || 0) * (obj.scaleY || 1)) / 2
+        const distance = Math.sqrt(
+          Math.pow(objCenterX - canvasCenter.x, 2) +
+          Math.pow(objCenterY - canvasCenter.y, 2)
+        )
+
+        if (distance < minDistance) {
+          minDistance = distance
+          closestObject = obj
+        }
+      })
+
+      // Select the object closest to center
+      fabricCanvas.discardActiveObject()
+      fabricCanvas.setActiveObject(closestObject)
+      fabricCanvas.requestRenderAll()
+    }
   }
 
   const handleSaveSVG = async (newSVGCode: string) => {
@@ -871,7 +1035,11 @@ function App() {
         const svgGroup = fabricUtil.groupSVGElements(result.objects, result.options)
 
         // Position at the same location as the old one
-        await tilingEngine.createTiledObject(svgGroup, position, layerId)
+        if (tilingEngine.isVirtualTilingEnabled()) {
+          await tilingEngine.createCanonicalObject(svgGroup, position, layerId)
+        } else {
+          await tilingEngine.createTiledObject(svgGroup, position, layerId)
+        }
         fabricCanvas.requestRenderAll()
       }).catch((err) => console.error('SVG load error:', err))
     } catch (err) {
@@ -972,23 +1140,23 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-bg-dark text-text-primary overflow-hidden">
-      <header className="flex items-center px-6 py-3 bg-bg-panel border-b border-border-subtle">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">◫</span>
-          <span className="text-xl font-semibold">Endless Tiles</span>
+      <header className="flex items-center px-6 py-4 bg-bg-panel/80 backdrop-blur-sm border-b border-primary/10">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl text-primary">◫</span>
+          <span className="text-xl font-semibold text-white">Endless Tiles</span>
         </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <aside className="w-60 bg-bg-panel border-r border-border-subtle flex flex-col gap-4 p-4 overflow-y-auto">
+        <aside className="w-60 bg-bg-panel border-r border-primary/10 flex flex-col gap-4 p-4 overflow-y-auto">
           <div className="flex flex-col gap-2">
             <span className="text-xs font-medium text-text-muted uppercase tracking-wide">Tools</span>
             <div className="grid grid-cols-3 gap-2">
               <Button
-                className={`p-3 rounded transition-colors ${
+                className={`p-3 rounded-lg transition-all ${
                   tool === 'select'
-                    ? 'bg-accent-teal/20 text-accent-teal'
-                    : 'bg-white/5 text-text-muted hover:bg-white/10'
+                    ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(45,212,168,0.2)]'
+                    : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                 }`}
                 onPress={() => setTool('select')}
                 aria-label="Select tool"
@@ -996,10 +1164,10 @@ function App() {
                 <MousePointer2 size={20} />
               </Button>
               <Button
-                className={`p-3 rounded transition-colors ${
+                className={`p-3 rounded-lg transition-all ${
                   tool === 'brush'
-                    ? 'bg-accent-teal/20 text-accent-teal'
-                    : 'bg-white/5 text-text-muted hover:bg-white/10'
+                    ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(45,212,168,0.2)]'
+                    : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                 }`}
                 onPress={() => setTool('brush')}
                 aria-label="Brush tool"
@@ -1007,10 +1175,10 @@ function App() {
                 <Brush size={20} />
               </Button>
               <Button
-                className={`p-3 rounded transition-colors ${
+                className={`p-3 rounded-lg transition-all ${
                   tool === 'eraser'
-                    ? 'bg-accent-teal/20 text-accent-teal'
-                    : 'bg-white/5 text-text-muted hover:bg-white/10'
+                    ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(45,212,168,0.2)]'
+                    : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                 }`}
                 onPress={() => setTool('eraser')}
                 aria-label="Eraser tool"
@@ -1018,10 +1186,10 @@ function App() {
                 <Eraser size={20} />
               </Button>
               <Button
-                className={`p-3 rounded transition-colors ${
+                className={`p-3 rounded-lg transition-all ${
                   tool === 'rectangle'
-                    ? 'bg-accent-teal/20 text-accent-teal'
-                    : 'bg-white/5 text-text-muted hover:bg-white/10'
+                    ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(45,212,168,0.2)]'
+                    : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                 }`}
                 onPress={() => setTool('rectangle')}
                 aria-label="Rectangle tool"
@@ -1029,10 +1197,10 @@ function App() {
                 <Square size={20} />
               </Button>
               <Button
-                className={`p-3 rounded transition-colors ${
+                className={`p-3 rounded-lg transition-all ${
                   tool === 'circle'
-                    ? 'bg-accent-teal/20 text-accent-teal'
-                    : 'bg-white/5 text-text-muted hover:bg-white/10'
+                    ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(45,212,168,0.2)]'
+                    : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                 }`}
                 onPress={() => setTool('circle')}
                 aria-label="Circle tool"
@@ -1040,10 +1208,10 @@ function App() {
                 <CircleIcon size={20} />
               </Button>
               <Button
-                className={`p-3 rounded transition-colors ${
+                className={`p-3 rounded-lg transition-all ${
                   tool === 'svg'
-                    ? 'bg-accent-teal/20 text-accent-teal'
-                    : 'bg-white/5 text-text-muted hover:bg-white/10'
+                    ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(45,212,168,0.2)]'
+                    : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                 }`}
                 onPress={() => setIsImportDialogOpen(true)}
                 aria-label="Import SVG or image"
@@ -1064,7 +1232,7 @@ function App() {
               max="64"
               value={brushSize}
               onChange={(e) => setBrushSize(Number(e.target.value))}
-              className="w-full h-2 bg-white/10 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-accent-teal [&::-webkit-slider-thumb]:rounded-full"
+              className="w-full"
             />
           </div>
 
@@ -1094,15 +1262,15 @@ function App() {
                 }}
                 placeholder="#ff6b6b"
                 maxLength={7}
-                className="flex-1 px-2 py-2 bg-white/5 border border-border-subtle rounded text-sm font-mono focus:ring-2 focus:ring-accent-teal outline-none"
+                className="flex-1 px-2 py-2 bg-white/5 border border-primary/20 rounded-lg text-sm font-mono focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none"
               />
             </div>
             <div className="flex flex-wrap gap-2">
               {presetColors.map((c) => (
                 <button
                   key={c}
-                  className={`w-8 h-8 rounded transition-transform ${
-                    color === c ? 'ring-2 ring-accent-teal scale-110' : 'hover:scale-110'
+                  className={`w-8 h-8 rounded-lg transition-all ${
+                    color === c ? 'ring-2 ring-primary scale-110 shadow-[0_0_10px_rgba(45,212,168,0.3)]' : 'hover:scale-110'
                   }`}
                   style={{ background: c }}
                   onClick={() => setColor(c)}
@@ -1113,10 +1281,10 @@ function App() {
 
           <div className="flex flex-col gap-2">
             <Button
-              className={`px-3 py-2 rounded text-sm transition-colors ${
+              className={`px-3 py-2 rounded-lg text-sm transition-all ${
                 showZoomView
-                  ? 'bg-accent-teal/20 text-accent-teal'
-                  : 'bg-white/5 text-text-primary hover:bg-white/10'
+                  ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(45,212,168,0.2)]'
+                  : 'bg-white/5 text-text-primary hover:bg-white/10 hover:text-white'
               }`}
               onPress={() => setShowZoomView(!showZoomView)}
               aria-label={showZoomView ? 'Hide zoom view' : 'Show zoom view'}
@@ -1124,35 +1292,35 @@ function App() {
               {showZoomView ? 'Hide Zoom' : 'Show Zoom'}
             </Button>
             <Button
-              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
+              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-all hover:text-white border border-transparent hover:border-primary/20"
               onPress={handleImportClick}
               aria-label="Import file"
             >
               Import File
             </Button>
             <Button
-              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
+              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-all hover:text-white border border-transparent hover:border-primary/20"
               onPress={() => setIsSVGCodeDialogOpen(true)}
               aria-label="Open SVG code editor"
             >
               SVG Code
             </Button>
             <Button
-              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors"
+              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-all hover:text-white border border-transparent hover:border-primary/20"
               onPress={clearCanvas}
               aria-label="Clear canvas"
             >
               Clear
             </Button>
             <Button
-              className="px-3 py-2 bg-accent-teal hover:bg-accent-teal/90 rounded text-sm font-medium transition-colors"
+              className="px-3 py-2 bg-primary hover:bg-primary-light rounded-lg text-sm font-medium transition-all text-bg-dark shadow-[0_0_15px_rgba(45,212,168,0.3)] hover:shadow-[0_0_20px_rgba(45,212,168,0.5)]"
               onPress={handleExportClick}
               aria-label="Export tile"
             >
               Export
             </Button>
             <Button
-              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-all hover:text-white border border-transparent hover:border-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
               onPress={handleImportProjectClick}
               isDisabled={isImporting}
               aria-label="Import project"
@@ -1160,7 +1328,7 @@ function App() {
               {isImporting ? 'Importing...' : 'Import Project'}
             </Button>
             <Button
-              className="px-3 py-2 bg-accent-teal hover:bg-accent-teal/90 rounded text-sm font-medium transition-colors"
+              className="px-3 py-2 bg-primary hover:bg-primary-light rounded-lg text-sm font-medium transition-all text-bg-dark shadow-[0_0_15px_rgba(45,212,168,0.3)] hover:shadow-[0_0_20px_rgba(45,212,168,0.5)]"
               onPress={() => setIsProjectExportDialogOpen(true)}
               aria-label="Export project"
             >
@@ -1186,7 +1354,7 @@ function App() {
         <div className="flex-1 flex flex-col p-4 gap-4 overflow-auto">
           <div className="flex items-start justify-center gap-6 flex-wrap">
             {/* 3x3 Grid Canvas Section */}
-            <div className="flex flex-col gap-3 bg-bg-panel rounded-lg border border-border-subtle p-4 shadow-xl shrink-0">
+            <div className="flex flex-col gap-3 bg-bg-panel rounded-xl border border-primary/10 p-4 shadow-xl shrink-0 panel-glow">
               <span className="text-sm font-semibold text-text-primary">Draw on 3x3 Grid</span>
 
               <div className="relative">
@@ -1197,7 +1365,9 @@ function App() {
                 <FabricCanvas
                   className="block"
                   visible={true}
-                  onCanvasReady={setFabricCanvas}
+                  tileSize={DRAWING_TILE_SIZE}
+                  onCanvasReady={handleCanvasReady}
+                  onAfterRender={updateTilePreview}
                 />
               </div>
             </div>
@@ -1214,14 +1384,14 @@ function App() {
                 onFollowModeChange={setFollowMode}
               />
             ) : (
-              <div className="flex flex-col gap-3 bg-bg-panel rounded-lg border border-border-subtle p-4 shadow-xl shrink-0">
+              <div className="flex flex-col gap-3 bg-bg-panel rounded-xl border border-primary/10 p-4 shadow-xl shrink-0 panel-glow">
                 <span className="text-sm font-semibold text-text-primary">Tile Result</span>
                 <div className="relative">
                   <canvas
                     ref={tileCanvasRef}
                     width={DRAWING_TILE_SIZE}
                     height={DRAWING_TILE_SIZE}
-                    className="block rounded border-2 border-accent-teal/30 shadow-lg"
+                    className="block rounded-lg border-2 border-primary/30 shadow-lg shadow-primary/10"
                   />
                 </div>
               </div>
@@ -1229,7 +1399,7 @@ function App() {
           </div>
         </div>
 
-        <aside className="w-96 bg-bg-panel border-l border-border-subtle flex flex-col gap-3 p-4 overflow-y-auto">
+        <aside className="w-96 bg-bg-panel border-l border-primary/10 flex flex-col gap-3 p-4 overflow-y-auto">
           <LayerPanel
             layerManager={layerManager}
             currentLayerId={currentLayerId}
@@ -1256,6 +1426,7 @@ function App() {
               onUpdatePosition={updatePosition}
               onUpdateRotation={updateRotation}
               onUpdateScale={updateScale}
+              onUpdateFlip={updateFlip}
               snapToGrid={snapToGrid}
               onToggleSnapToGrid={setSnapToGrid}
               gridSize={gridSize}

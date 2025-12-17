@@ -1,17 +1,32 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #6366f1;
-  --color-bg-dark: #0a0a0f;
-  --color-bg-panel: #12121a;
-  --color-bg-elevated: #1a1a25;
-  --color-border-subtle: #2a2a3a;
-  --color-text-primary: #f0f0f5;
-  --color-text-muted: #8888a0;
+  /* Quebide-inspired colors */
+  --color-primary: #2dd4a8;
+  --color-primary-light: #3de8c0;
+  --color-primary-lighter: #5eead4;
+
+  /* Backgrounds - darker like Quebide */
+  --color-bg-dark: #030712;
+  --color-bg-panel: #0a0f1a;
+  --color-bg-elevated: #111827;
+
+  /* Borders */
+  --color-border-subtle: rgba(45, 212, 168, 0.15);
+
+  /* Text */
+  --color-text-primary: #ffffff;
+  --color-text-muted: #9ca3af;
+
+  /* Accents */
+  --color-accent-teal: #2dd4a8;
+  --color-accent-cyan: #06b6d4;
   --color-accent-coral: #ff6b6b;
-  --color-accent-teal: #4ecdc4;
   --color-accent-sky: #45b7d1;
+
+  /* Font */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 @layer base {
@@ -22,10 +37,11 @@
   }
 
   body {
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: var(--font-sans);
     background: var(--color-bg-dark);
     color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
+    color-scheme: dark;
   }
 
   button {
@@ -34,10 +50,85 @@
     border: none;
     background: transparent;
     color: inherit;
+    transition: all 0.2s ease;
   }
 
   input, select {
     font-family: inherit;
     color: inherit;
+    transition: all 0.2s ease;
   }
+}
+
+/* Quebide-style ambient background effects */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(45, 212, 168, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 212, 168, 0.03) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+}
+
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.015;
+  pointer-events: none;
+}
+
+/* Subtle glow effect for panels */
+.panel-glow {
+  box-shadow: 0 0 20px rgba(45, 212, 168, 0.03), inset 0 0 0 1px rgba(45, 212, 168, 0.1);
+}
+
+/* Slider styling to match Quebide */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-track {
+  background: rgba(255, 255, 255, 0.1);
+  height: 6px;
+  border-radius: 3px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #2dd4a8;
+  border-radius: 50%;
+  margin-top: -5px;
+  box-shadow: 0 0 10px rgba(45, 212, 168, 0.4);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(45, 212, 168, 0.6);
+}
+
+input[type="range"]::-moz-range-track {
+  background: rgba(255, 255, 255, 0.1);
+  height: 6px;
+  border-radius: 3px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #2dd4a8;
+  border-radius: 50%;
+  border: none;
+  box-shadow: 0 0 10px rgba(45, 212, 168, 0.4);
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(45, 212, 168, 0.6);
 }

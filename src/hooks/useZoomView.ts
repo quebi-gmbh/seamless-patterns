@@ -21,7 +21,6 @@ export function useZoomView({
   const [centerPoint, setCenterPoint] = useState({ x: 128, y: 128 })
   const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastRenderTime = useRef(0)
-  const cachedImageRef = useRef<HTMLImageElement | null>(null)
 
   /**
    * Extract and render a zoomed region from the Fabric canvas
@@ -48,12 +47,15 @@ export function useZoomView({
     if (!ctx) return
 
     // Calculate source region to extract (in Fabric canvas coordinates)
-    const viewportSize = 200 / zoomLevel // Size of area to extract
-    const sourceX = centerPoint.x - viewportSize / 2
-    const sourceY = centerPoint.y - viewportSize / 2
+    // Account for device pixel ratio - Fabric's canvas element is scaled by the retina multiplier
+    const retinaScaling = fabricCanvas.getRetinaScaling()
+    const viewportSize = 200 / zoomLevel // Size of area to extract (in logical pixels)
+    const sourceX = (centerPoint.x - viewportSize / 2) * retinaScaling
+    const sourceY = (centerPoint.y - viewportSize / 2) * retinaScaling
+    const scaledViewportSize = viewportSize * retinaScaling
 
-    // Use cached image if available, otherwise create new one
-    const renderWithImage = (img: HTMLImageElement) => {
+    // Render the zoomed region from a canvas or image source
+    const renderWithImage = (img: CanvasImageSource) => {
       // Clear zoom canvas
       ctx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height)
 
@@ -63,8 +65,8 @@ export function useZoomView({
         img,
         sourceX,
         sourceY,
-        viewportSize,
-        viewportSize,
+        scaledViewportSize,
+        scaledViewportSize,
         0,
         0,
         200,
@@ -105,20 +107,16 @@ export function useZoomView({
       ctx.stroke()
     }
 
-    // Get the Fabric canvas as an image
+    // Get the actual canvas element (not Fabric's toDataURL which misses virtual copies)
+    // The virtual copies are drawn directly to the canvas context in after:render,
+    // so we need to capture the DOM element which includes them
     try {
-      const dataURL = fabricCanvas.toDataURL({
-        format: 'png',
-        multiplier: 1,
-      })
-
-      // Create new image
-      const img = new Image()
-      img.onload = () => {
-        cachedImageRef.current = img
-        renderWithImage(img)
+      const canvasElement = fabricCanvas.getElement()
+      if (canvasElement) {
+        // Use the canvas element directly as the image source
+        // This captures everything including virtual copies drawn after Fabric renders
+        renderWithImage(canvasElement)
       }
-      img.src = dataURL
     } catch (err) {
       console.error('Failed to render zoom view:', err)
     }

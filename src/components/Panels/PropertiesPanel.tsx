@@ -8,6 +8,34 @@ interface PropertiesPanelProps {
   onUpdateProperties: (properties: Record<string, unknown>) => void
 }
 
+// Helper to convert any color format to hex for HTML color input
+const toHexColor = (color: unknown): string => {
+  if (!color || color === 'transparent' || color === null) return '#000000'
+  if (typeof color !== 'string') return '#000000'
+
+  // Already hex format
+  if (color.startsWith('#')) {
+    // Ensure it's 7 characters (#rrggbb)
+    if (color.length === 4) {
+      // Expand #rgb to #rrggbb
+      return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
+    }
+    return color
+  }
+
+  // Handle rgb/rgba format
+  const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0')
+    const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0')
+    const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0')
+    return `#${r}${g}${b}`
+  }
+
+  // Return as-is if it looks like a valid color, otherwise default
+  return color.startsWith('#') ? color : '#000000'
+}
+
 export function PropertiesPanel({ selectedObject, onUpdateProperties }: PropertiesPanelProps) {
   const [properties, setProperties] = useState<Record<string, unknown>>({})
 
@@ -37,10 +65,21 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
         extracted.opacity = selectedObject.opacity || 1
         break
       case 'path':
-        extracted.fill = selectedObject.fill || 'transparent'
-        extracted.stroke = selectedObject.stroke || '#000000'
+        const fillColor = selectedObject.fill
+        const hasFill = fillColor &&
+                        fillColor !== 'transparent' &&
+                        fillColor !== null
+        extracted.fillEnabled = !!hasFill
+        extracted.fill = hasFill ? toHexColor(fillColor) : '#000000'
+
+        const strokeColor = selectedObject.stroke
+        const hasStroke = strokeColor &&
+                          strokeColor !== 'transparent' &&
+                          strokeColor !== null
+        extracted.strokeEnabled = !!hasStroke
+        extracted.stroke = hasStroke ? toHexColor(strokeColor) : '#000000'
         extracted.strokeWidth = selectedObject.strokeWidth || 1
-        extracted.opacity = selectedObject.opacity || 1
+        extracted.opacity = selectedObject.opacity ?? 1
         break
       case 'image':
         extracted.opacity = selectedObject.opacity || 1
@@ -69,9 +108,27 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
   }
 
   const handleChange = (key: string, value: unknown) => {
-    const updated = { ...properties, [key]: value }
-    setProperties(updated)
-    onUpdateProperties({ [key]: value })
+    setProperties(prev => ({ ...prev, [key]: value }))
+    // Only send actual Fabric.js properties to the object, not UI-only state like fillEnabled/strokeEnabled
+    if (key !== 'fillEnabled' && key !== 'strokeEnabled') {
+      onUpdateProperties({ [key]: value })
+    }
+  }
+
+  // Handle fill toggle - updates both UI state and fabric object atomically
+  const handleFillToggle = (enabled: boolean) => {
+    const currentFill = toHexColor(properties.fill)
+    const newFill = enabled ? currentFill : 'transparent'
+    setProperties(prev => ({ ...prev, fillEnabled: enabled, fill: currentFill }))
+    onUpdateProperties({ fill: newFill })
+  }
+
+  // Handle stroke toggle - updates both UI state and fabric object atomically
+  const handleStrokeToggle = (enabled: boolean) => {
+    const currentStroke = toHexColor(properties.stroke)
+    const newStroke = enabled ? currentStroke : 'transparent'
+    setProperties(prev => ({ ...prev, strokeEnabled: enabled, stroke: currentStroke }))
+    onUpdateProperties({ stroke: newStroke })
   }
 
   const renderRectProperties = () => (
@@ -84,7 +141,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
         aria-label="Width"
       >
         <Label className="text-xs font-medium text-text-muted">Width</Label>
-        <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+        <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
       </NumberField>
 
       <NumberField
@@ -95,7 +152,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
         aria-label="Height"
       >
         <Label className="text-xs font-medium text-text-muted">Height</Label>
-        <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+        <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
       </NumberField>
 
       <div className="flex flex-col gap-1">
@@ -104,7 +161,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.fill as string || '#000000'}
           onChange={(e) => handleChange('fill', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
+          className="h-10 w-full rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
           aria-label="Fill color"
         />
       </div>
@@ -115,7 +172,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.stroke === 'transparent' ? '#000000' : properties.stroke as string || '#000000'}
           onChange={(e) => handleChange('stroke', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
+          className="h-10 w-full rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
           aria-label="Stroke color"
         />
       </div>
@@ -128,7 +185,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
         aria-label="Stroke width"
       >
         <Label className="text-xs font-medium text-text-muted">Stroke Width</Label>
-        <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+        <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
       </NumberField>
 
       <Slider
@@ -146,8 +203,8 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
             {({state}) => `${state.values[0]}%`}
           </SliderOutput>
         </div>
-        <SliderTrack className="relative w-full h-2 bg-white/10 rounded">
-          <SliderThumb className="h-4 w-4 bg-accent-teal rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-teal" />
+        <SliderTrack className="relative w-full h-2 bg-white/10 rounded-lg">
+          <SliderThumb className="h-4 w-4 bg-primary rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-[0_0_10px_rgba(45,212,168,0.4)] transition-all hover:scale-110" />
         </SliderTrack>
       </Slider>
     </div>
@@ -163,7 +220,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
         aria-label="Radius"
       >
         <Label className="text-xs font-medium text-text-muted">Radius</Label>
-        <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+        <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
       </NumberField>
 
       <div className="flex flex-col gap-1">
@@ -172,7 +229,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.fill as string || '#000000'}
           onChange={(e) => handleChange('fill', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
+          className="h-10 w-full rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
           aria-label="Fill color"
         />
       </div>
@@ -183,7 +240,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           type="color"
           value={properties.stroke === 'transparent' ? '#000000' : properties.stroke as string || '#000000'}
           onChange={(e) => handleChange('stroke', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
+          className="h-10 w-full rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
           aria-label="Stroke color"
         />
       </div>
@@ -196,7 +253,7 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
         aria-label="Stroke width"
       >
         <Label className="text-xs font-medium text-text-muted">Stroke Width</Label>
-        <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+        <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
       </NumberField>
 
       <Slider
@@ -214,8 +271,8 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
             {({state}) => `${state.values[0]}%`}
           </SliderOutput>
         </div>
-        <SliderTrack className="relative w-full h-2 bg-white/10 rounded">
-          <SliderThumb className="h-4 w-4 bg-accent-teal rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-teal" />
+        <SliderTrack className="relative w-full h-2 bg-white/10 rounded-lg">
+          <SliderThumb className="h-4 w-4 bg-primary rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-[0_0_10px_rgba(45,212,168,0.4)] transition-all hover:scale-110" />
         </SliderTrack>
       </Slider>
     </div>
@@ -223,38 +280,63 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
 
   const renderPathProperties = () => (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs font-medium text-text-muted">Fill Color</Label>
-        <input
-          type="color"
-          value={properties.fill === 'transparent' ? '#000000' : properties.fill as string || '#000000'}
-          onChange={(e) => handleChange('fill', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
-          aria-label="Fill color"
-        />
+      {/* Fill Checkbox + Color */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="fillEnabled"
+            checked={properties.fillEnabled as boolean ?? false}
+            onChange={(e) => handleFillToggle(e.target.checked)}
+            className="h-4 w-4 rounded border-primary/20 bg-white/5 text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+          />
+          <Label htmlFor="fillEnabled" className="text-xs font-medium text-text-muted cursor-pointer">Fill</Label>
+        </div>
+        {(properties.fillEnabled as boolean) && (
+          <input
+            type="color"
+            value={properties.fill as string || '#000000'}
+            onChange={(e) => handleChange('fill', e.target.value)}
+            className="h-10 w-full rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
+            aria-label="Fill color"
+          />
+        )}
       </div>
 
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs font-medium text-text-muted">Stroke Color</Label>
-        <input
-          type="color"
-          value={properties.stroke as string || '#000000'}
-          onChange={(e) => handleChange('stroke', e.target.value)}
-          className="h-10 w-full rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-teal"
-          aria-label="Stroke color"
-        />
+      {/* Stroke Checkbox + Color + Width */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="strokeEnabled"
+            checked={properties.strokeEnabled as boolean ?? false}
+            onChange={(e) => handleStrokeToggle(e.target.checked)}
+            className="h-4 w-4 rounded border-primary/20 bg-white/5 text-primary focus:ring-2 focus:ring-primary cursor-pointer"
+          />
+          <Label htmlFor="strokeEnabled" className="text-xs font-medium text-text-muted cursor-pointer">Border/Stroke</Label>
+        </div>
+        {(properties.strokeEnabled as boolean) && (
+          <>
+            <input
+              type="color"
+              value={properties.stroke as string || '#000000'}
+              onChange={(e) => handleChange('stroke', e.target.value)}
+              className="h-10 w-full rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label="Stroke color"
+            />
+            <NumberField
+              value={properties.strokeWidth as number || 1}
+              onChange={(val) => handleChange('strokeWidth', val)}
+              minValue={0}
+              className="flex flex-col gap-1"
+              aria-label="Stroke width"
+            >
+              <Label className="text-xs font-medium text-text-muted">Stroke Width</Label>
+              <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
+            </NumberField>
+          </>
+        )}
       </div>
-
-      <NumberField
-        value={properties.strokeWidth as number || 1}
-        onChange={(val) => handleChange('strokeWidth', val)}
-        minValue={0}
-        className="flex flex-col gap-1"
-        aria-label="Stroke width"
-      >
-        <Label className="text-xs font-medium text-text-muted">Stroke Width</Label>
-        <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
-      </NumberField>
 
       <Slider
         value={[((properties.opacity as number || 1) * 100)]}
@@ -271,8 +353,8 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
             {({state}) => `${state.values[0]}%`}
           </SliderOutput>
         </div>
-        <SliderTrack className="relative w-full h-2 bg-white/10 rounded">
-          <SliderThumb className="h-4 w-4 bg-accent-teal rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-teal" />
+        <SliderTrack className="relative w-full h-2 bg-white/10 rounded-lg">
+          <SliderThumb className="h-4 w-4 bg-primary rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-[0_0_10px_rgba(45,212,168,0.4)] transition-all hover:scale-110" />
         </SliderTrack>
       </Slider>
     </div>
@@ -294,11 +376,14 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
           {({state}) => `${state.values[0]}%`}
         </SliderOutput>
       </div>
-      <SliderTrack className="relative w-full h-2 bg-white/10 rounded">
-        <SliderThumb className="h-4 w-4 bg-accent-teal rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-teal" />
+      <SliderTrack className="relative w-full h-2 bg-white/10 rounded-lg">
+        <SliderThumb className="h-4 w-4 bg-primary rounded-full top-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-[0_0_10px_rgba(45,212,168,0.4)] transition-all hover:scale-110" />
       </SliderTrack>
     </Slider>
   )
+
+  // For debugging - log type if it's unexpected
+  const isKnownType = ['rect', 'circle', 'path', 'image', 'group'].includes(type)
 
   return (
     <>
@@ -306,6 +391,11 @@ export function PropertiesPanel({ selectedObject, onUpdateProperties }: Properti
       {type === 'circle' && renderCircleProperties()}
       {type === 'path' && renderPathProperties()}
       {type === 'image' && renderImageProperties()}
+      {!isKnownType && (
+        <div className="py-4 text-center text-sm text-text-muted">
+          Unknown object type: {type}
+        </div>
+      )}
     </>
   )
 }

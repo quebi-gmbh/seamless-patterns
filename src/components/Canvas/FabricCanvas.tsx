@@ -1,25 +1,32 @@
 import { useRef, useEffect } from 'react'
-import { useFabricCanvas } from '../../hooks/useFabricCanvas'
+import { useFabricCanvas, type VirtualTilingContext } from '../../hooks/useFabricCanvas'
 
 interface FabricCanvasProps {
   className?: string
   visible?: boolean
-  onCanvasReady?: (canvas: import('fabric').Canvas) => void
+  tileSize?: number
+  onCanvasReady?: (canvas: import('fabric').Canvas, virtualTilingContext: VirtualTilingContext) => void
+  onAfterRender?: () => void
 }
 
 export function FabricCanvas({
   className,
   visible = true,
-  onCanvasReady
+  tileSize = 256,
+  onCanvasReady,
+  onAfterRender
 }: FabricCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const fabricCanvas = useFabricCanvas(canvasRef)
+  const { fabricCanvas, virtualTilingContext } = useFabricCanvas(canvasRef, {
+    tileSize,
+    onAfterRender
+  })
 
   useEffect(() => {
     if (fabricCanvas && onCanvasReady) {
-      onCanvasReady(fabricCanvas)
+      onCanvasReady(fabricCanvas, virtualTilingContext)
     }
-  }, [fabricCanvas, onCanvasReady])
+  }, [fabricCanvas, virtualTilingContext, onCanvasReady])
 
   return (
     <canvas

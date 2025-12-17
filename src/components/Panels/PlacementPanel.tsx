@@ -8,6 +8,7 @@ interface PlacementPanelProps {
   onUpdatePosition: (x: number, y: number) => void
   onUpdateRotation: (angle: number) => void
   onUpdateScale: (scaleX: number, scaleY: number) => void
+  onUpdateFlip: (flipX: boolean, flipY: boolean) => void
   snapToGrid: boolean
   onToggleSnapToGrid: (enabled: boolean) => void
   gridSize: number
@@ -20,6 +21,7 @@ export function PlacementPanel({
   onUpdatePosition,
   onUpdateRotation,
   onUpdateScale,
+  onUpdateFlip,
   snapToGrid,
   onToggleSnapToGrid,
   gridSize,
@@ -32,6 +34,8 @@ export function PlacementPanel({
   const [scaleX, setScaleX] = useState(1)
   const [scaleY, setScaleY] = useState(1)
   const [lockAspectRatio, setLockAspectRatio] = useState(true)
+  const [flipX, setFlipX] = useState(false)
+  const [flipY, setFlipY] = useState(false)
 
   // Update local state when selected object changes or its properties change
   useEffect(() => {
@@ -42,6 +46,8 @@ export function PlacementPanel({
     setRotation(Math.round(selectedObject.angle || 0))
     setScaleX(selectedObject.scaleX || 1)
     setScaleY(selectedObject.scaleY || 1)
+    setFlipX(selectedObject.flipX || false)
+    setFlipY(selectedObject.flipY || false)
   }, [
     selectedObject,
     selectedObject?.left,
@@ -49,6 +55,8 @@ export function PlacementPanel({
     selectedObject?.angle,
     selectedObject?.scaleX,
     selectedObject?.scaleY,
+    selectedObject?.flipX,
+    selectedObject?.flipY,
     updateCounter,
   ])
 
@@ -116,7 +124,7 @@ export function PlacementPanel({
           aria-label="X position"
         >
           <Label className="text-xs text-text-muted">X</Label>
-          <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+          <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
         </NumberField>
         <NumberField
           value={y}
@@ -126,7 +134,7 @@ export function PlacementPanel({
           aria-label="Y position"
         >
           <Label className="text-xs text-text-muted">Y</Label>
-          <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+          <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
         </NumberField>
       </div>
 
@@ -142,7 +150,7 @@ export function PlacementPanel({
       >
         <Label className="text-xs font-medium text-text-muted">Rotation</Label>
         <div className="flex items-center gap-2">
-          <Input className="flex-1 px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+          <Input className="flex-1 px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
           <span className="text-xs text-text-muted">°</span>
         </div>
       </NumberField>
@@ -153,10 +161,10 @@ export function PlacementPanel({
           <Label className="text-xs font-medium text-text-muted">Scale</Label>
           <Button
             onPress={() => setLockAspectRatio(!lockAspectRatio)}
-            className={`p-1.5 rounded transition-colors ${
+            className={`p-1.5 rounded-lg transition-all ${
               lockAspectRatio
-                ? 'bg-accent-teal/20 text-accent-teal'
-                : 'bg-white/5 text-text-muted hover:bg-white/10'
+                ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
+                : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
             }`}
             aria-label={lockAspectRatio ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
           >
@@ -172,7 +180,7 @@ export function PlacementPanel({
           aria-label="Scale X"
         >
           <Label className="text-xs text-text-muted">X</Label>
-          <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm" />
+          <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all" />
         </NumberField>
         <NumberField
           value={parseFloat(scaleY.toFixed(2))}
@@ -184,8 +192,41 @@ export function PlacementPanel({
           aria-label="Scale Y"
         >
           <Label className="text-xs text-text-muted">Y</Label>
-          <Input className="px-3 py-2 bg-white/5 border border-border-subtle rounded focus:ring-2 focus:ring-accent-teal outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed" />
+          <Input className="px-3 py-2 bg-white/5 border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary/40 outline-none text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed" />
         </NumberField>
+      </div>
+
+      {/* Mirror Controls */}
+      <div className="flex flex-col gap-3">
+        <Label className="text-xs font-medium text-text-muted">Mirror</Label>
+        <div className="flex gap-4">
+          <Switch
+            isSelected={flipX}
+            onChange={(value) => {
+              setFlipX(value)
+              onUpdateFlip(value, flipY)
+            }}
+            className="group flex items-center gap-2"
+          >
+            <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition-all group-data-selected:bg-primary group-data-selected:shadow-[0_0_10px_rgba(45,212,168,0.3)]">
+              <span className="h-4 w-4 rounded-full bg-white transition-transform duration-200 group-data-selected:translate-x-4" />
+            </div>
+            <Label className="text-sm text-white cursor-pointer">X</Label>
+          </Switch>
+          <Switch
+            isSelected={flipY}
+            onChange={(value) => {
+              setFlipY(value)
+              onUpdateFlip(flipX, value)
+            }}
+            className="group flex items-center gap-2"
+          >
+            <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition-all group-data-selected:bg-primary group-data-selected:shadow-[0_0_10px_rgba(45,212,168,0.3)]">
+              <span className="h-4 w-4 rounded-full bg-white transition-transform duration-200 group-data-selected:translate-x-4" />
+            </div>
+            <Label className="text-sm text-white cursor-pointer">Y</Label>
+          </Switch>
+        </div>
       </div>
 
       {/* Snap to Grid */}
@@ -195,10 +236,10 @@ export function PlacementPanel({
           onChange={onToggleSnapToGrid}
           className="group flex items-center gap-2"
         >
-          <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition group-data-selected:bg-accent-teal">
+          <div className="flex h-5 w-9 items-center rounded-full bg-white/10 px-0.5 transition-all group-data-selected:bg-primary group-data-selected:shadow-[0_0_10px_rgba(45,212,168,0.3)]">
             <span className="h-4 w-4 rounded-full bg-white transition-transform duration-200 group-data-selected:translate-x-4" />
           </div>
-          <Label className="text-sm text-text-primary cursor-pointer">Snap to Grid</Label>
+          <Label className="text-sm text-white cursor-pointer">Snap to Grid</Label>
         </Switch>
         {snapToGrid && (
           <div className="flex gap-2">
@@ -206,10 +247,10 @@ export function PlacementPanel({
               <Button
                 key={size}
                 onPress={() => onChangeGridSize(size)}
-                className={`flex-1 px-3 py-2 rounded text-sm transition-colors ${
+                className={`flex-1 px-3 py-2 rounded-lg text-sm transition-all ${
                   gridSize === size
-                    ? 'bg-accent-teal/20 text-accent-teal'
-                    : 'bg-white/5 text-text-muted hover:bg-white/10'
+                    ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
+                    : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
                 }`}
                 aria-label={`Set grid size to ${size} pixels`}
               >
@@ -221,16 +262,16 @@ export function PlacementPanel({
       </div>
 
       {/* Keyboard Shortcuts Hint */}
-      <div className="p-3 bg-white/5 rounded border border-border-subtle">
+      <div className="p-3 bg-white/5 rounded-lg border border-primary/10">
         <div className="text-xs font-medium text-text-muted mb-2">Keyboard Shortcuts</div>
         <div className="flex flex-col gap-1 text-xs">
           <div className="flex justify-between">
             <span className="text-text-muted">Arrow Keys</span>
-            <span className="text-text-primary">Move 1px</span>
+            <span className="text-white">Move 1px</span>
           </div>
           <div className="flex justify-between">
             <span className="text-text-muted">Shift + Arrow</span>
-            <span className="text-text-primary">Move 10px</span>
+            <span className="text-white">Move 10px</span>
           </div>
         </div>
       </div>

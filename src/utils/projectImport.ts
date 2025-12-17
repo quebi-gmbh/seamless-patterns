@@ -80,16 +80,25 @@ export async function deserializeProject(
     // Sort entities by order to maintain z-index
     const sortedEntities = [...serializedLayer.entities].sort((a, b) => a.order - b.order)
 
-    for (const entity of sortedEntities) {
+    // Phase 1: Enliven all objects in parallel for this layer
+    const enlivenPromises = sortedEntities.map(async (entity) => {
       try {
-        // Deserialize Fabric object
         const [fabricObject] = await fabricUtil.enlivenObjects([entity.fabricObject])
+        return { fabricObject, entity, error: null }
+      } catch (error) {
+        console.error('Failed to enliven object:', entity, error)
+        return { fabricObject: null, entity, error }
+      }
+    })
+    const enlivenedResults = await Promise.all(enlivenPromises)
 
-        if (!fabricObject) {
-          console.error('Failed to enliven object:', entity)
-          continue
-        }
+    // Phase 2: Create tiled objects sequentially to maintain z-order
+    for (const { fabricObject, entity, error } of enlivenedResults) {
+      if (error || !fabricObject) {
+        continue
+      }
 
+      try {
         // Ensure custom properties are preserved
         const extObj = fabricObject as ExtendedFabricObject
         if (!extObj.id) extObj.id = entity.fabricObject.id
@@ -104,10 +113,16 @@ export async function deserializeProject(
           fabricCanvas.remove(extObj)
         }
 
-        // Recreate as tiled object using tilingEngine
+        // Recreate using tilingEngine
         // Pass the original mirrorGroupId to preserve entity group references
         const originalMirrorGroupId = entity.mirrorGroupId
-        await tilingEngine.createTiledObject(extObj, position, extObj.layerId!, originalMirrorGroupId)
+
+        // Use virtual tiling (createCanonicalObject) if enabled, otherwise use legacy (createTiledObject)
+        if (tilingEngine.isVirtualTilingEnabled()) {
+          await tilingEngine.createCanonicalObject(extObj, position, extObj.layerId!, originalMirrorGroupId)
+        } else {
+          await tilingEngine.createTiledObject(extObj, position, extObj.layerId!, originalMirrorGroupId)
+        }
       } catch (error) {
         console.error('Failed to import entity:', entity, error)
         // Continue with other entities even if one fails

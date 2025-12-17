@@ -1,16 +1,150 @@
 import type { Canvas, FabricObject } from 'fabric'
 import type { ExtendedFabricObject, TiledObjectMetadata } from '../types/FabricExtensions'
 import { generateUniqueId } from '../utils/idGenerator'
+import type { CanonicalObjectStore } from './CanonicalObjectStore'
+import type { SelectionProxyManager, ProxyRect } from './SelectionProxyManager'
 
 export class TilingEngine {
   private canvas: Canvas
   private tileSize: number
   private syncEnabled: boolean = true
 
+  // Virtual tiling components (optional - for gradual migration)
+  private canonicalStore: CanonicalObjectStore | null = null
+  private selectionProxyManager: SelectionProxyManager | null = null
+  private useVirtualTiling: boolean = false
+
   constructor(canvas: Canvas, tileSize: number) {
     this.canvas = canvas
     this.tileSize = tileSize
     this.setupTransformSync()
+  }
+
+  /**
+   * Enable virtual tiling mode with the provided stores
+   */
+  enableVirtualTiling(
+    canonicalStore: CanonicalObjectStore,
+    selectionProxyManager: SelectionProxyManager
+  ): void {
+    this.canonicalStore = canonicalStore
+    this.selectionProxyManager = selectionProxyManager
+    this.useVirtualTiling = true
+  }
+
+  /**
+   * Check if virtual tiling is enabled
+   */
+  isVirtualTilingEnabled(): boolean {
+    return this.useVirtualTiling
+  }
+
+  /**
+   * Creates a canonical object - single object stored, rendered 9 times via virtual tiling.
+   * This is the new virtual tiling method that replaces createTiledObject.
+   *
+   * Coordinate System:
+   * - Canvas is 768x768 (3x3 grid of 256px tiles)
+   * - Center tile is at (256, 256) to (512, 512) - this is where user draws
+   * - Objects are stored at their actual canvas position (in center tile range)
+   * - VirtualRenderingEngine draws 8 copies at ±tileSize offsets
+   *
+   * @param originalObject The Fabric object to store
+   * @param position The click position where the object was created
+   * @param layerId Optional layer ID to assign
+   * @param existingMirrorGroupId Optional existing mirrorGroupId to preserve (for import)
+   * @returns The mirrorGroupId of the created canonical object
+   */
+  async createCanonicalObject(
+    originalObject: FabricObject,
+    position: { x: number; y: number },
+    layerId?: string,
+    existingMirrorGroupId?: string
+  ): Promise<string> {
+    if (!this.canonicalStore) {
+      throw new Error('Virtual tiling not enabled. Call enableVirtualTiling() first.')
+    }
+
+    // Normalize position to center tile range [tileSize, 2*tileSize)
+    // This ensures the object is always placed within the center tile (256-512 on 768px canvas)
+    const normalizeToCenter = (val: number): number => {
+      // First get position within any tile [0, tileSize)
+      const inTile = ((val % this.tileSize) + this.tileSize) % this.tileSize
+      // Then offset to center tile
+      return inTile + this.tileSize
+    }
+
+    const canvasX = normalizeToCenter(position.x)
+    const canvasY = normalizeToCenter(position.y)
+
+    const mirrorGroupId = existingMirrorGroupId || generateUniqueId('mirror_group')
+
+    const extObj = originalObject as ExtendedFabricObject
+
+    // Set position to center tile coordinates
+    extObj.set({
+      left: canvasX,
+      top: canvasY,
+      selectable: false, // Canonical objects are not directly selectable
+      evented: false, // Events are handled by proxies
+      hasControls: false,
+      hasBorders: false,
+      lockScalingFlip: true,
+      uniformScaling: true,
+    })
+
+    // Add unique ID if not present
+    if (!extObj.id) {
+      extObj.id = generateUniqueId('obj')
+    }
+
+    // Add tiling metadata
+    const metadata: TiledObjectMetadata = {
+      isMirror: false,
+      mirrorGroupId,
+      tilePosition: [0, 0], // Canonical objects are at center tile
+    }
+    extObj.tiledMetadata = metadata
+
+    // Assign layer ID if provided
+    if (layerId) {
+      extObj.layerId = layerId
+    }
+
+    // Add to canonical store
+    this.canonicalStore.add(extObj, mirrorGroupId)
+
+    // Add to canvas so Fabric renders it at its position
+    // The after:render handler draws 8 copies at surrounding tiles
+    this.canvas.add(extObj)
+
+    this.canvas.requestRenderAll()
+    return mirrorGroupId
+  }
+
+  /**
+   * Remove a canonical object by mirrorGroupId
+   */
+  removeCanonicalObject(mirrorGroupId: string): void {
+    if (!this.canonicalStore) return
+
+    const obj = this.canonicalStore.get(mirrorGroupId)
+    if (obj) {
+      this.canvas.remove(obj)
+      this.canonicalStore.remove(mirrorGroupId)
+
+      // Also remove any active proxy
+      this.selectionProxyManager?.removeProxy(mirrorGroupId)
+
+      this.canvas.requestRenderAll()
+    }
+  }
+
+  /**
+   * Get a canonical object by mirrorGroupId
+   */
+  getCanonicalObject(mirrorGroupId: string): ExtendedFabricObject | null {
+    return this.canonicalStore?.get(mirrorGroupId) || null
   }
 
   /**
@@ -35,15 +169,23 @@ export class TilingEngine {
     const mirrorGroupId = existingMirrorGroupId || generateUniqueId('mirror_group')
     const allObjects: ExtendedFabricObject[] = []
 
+    // Clone all 24 objects in parallel (original + 24 clones = 25 total)
+    const clonePromises: Promise<FabricObject>[] = []
+    for (let i = 0; i < 24; i++) {
+      clonePromises.push(this.cloneObject(originalObject))
+    }
+    const clonedObjects = await Promise.all(clonePromises)
+
     // Create 5x5 grid from (-2,-2) to (2,2)
     // Canvas coordinate system: center tile [0, tileSize] is at tile position (0,0)
     // Visible area: [-tileSize, 2*tileSize] × [-tileSize, 2*tileSize]
+    let cloneIndex = 0
     for (let ty = -2; ty <= 2; ty++) {
       for (let tx = -2; tx <= 2; tx++) {
-        // Clone the object (or use original for first iteration)
+        // Use original for first position, clones for rest
         const obj = (tx === -2 && ty === -2)
           ? originalObject
-          : await this.cloneObject(originalObject)
+          : clonedObjects[cloneIndex++]
 
         const extObj = obj as ExtendedFabricObject
 
@@ -143,6 +285,25 @@ export class TilingEngine {
     const syncTarget = (target: any) => {
       if (!target) return
 
+      // Handle virtual tiling mode - sync proxy to canonical
+      if (this.useVirtualTiling && this.selectionProxyManager) {
+        if (target.type === 'activeselection') {
+          const selection = target
+          const objects = selection.getObjects() as ExtendedFabricObject[]
+
+          objects.forEach((obj) => {
+            if (this.selectionProxyManager!.isProxy(obj)) {
+              this.selectionProxyManager!.syncProxyToCanonical(obj as ProxyRect)
+            }
+          })
+        } else if (this.selectionProxyManager.isProxy(target)) {
+          this.selectionProxyManager.syncProxyToCanonical(target as ProxyRect)
+        }
+        // Note: No requestRenderAll() needed - Fabric already re-renders after transform events
+        return
+      }
+
+      // Legacy mode - sync 25 physical copies
       // Check if it's an ActiveSelection (multiple objects selected)
       if (target.type === 'activeselection') {
         const selection = target
@@ -245,8 +406,7 @@ export class TilingEngine {
       // Update control positions
       obj.setCoords()
     })
-
-    this.canvas.requestRenderAll()
+    // Note: No requestRenderAll() needed - Fabric already re-renders after transform events
   }
 
   /**
@@ -298,7 +458,6 @@ export class TilingEngine {
       // Update control positions
       obj.setCoords()
     })
-
-    this.canvas.requestRenderAll()
+    // Note: No requestRenderAll() needed - Fabric already re-renders after transform events
   }
 }

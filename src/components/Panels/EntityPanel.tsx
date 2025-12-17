@@ -284,30 +284,30 @@ export function EntityPanel({
       <div
         key={entity.mirrorGroupId}
         className={`
-          flex items-center justify-between px-3 py-2 rounded
-          transition-colors cursor-pointer
-          ${isSelected ? 'bg-accent-teal/20' : 'hover:bg-white/5'}
+          flex items-center justify-between px-3 py-2 rounded-lg
+          transition-all cursor-pointer
+          ${isSelected ? 'bg-primary/20 shadow-[0_0_10px_rgba(45,212,168,0.1)]' : 'hover:bg-white/5'}
           ${isNested ? 'ml-6' : ''}
         `}
         onClick={(e) => handleSelectEntity(entity.mirrorGroupId, e.shiftKey || e.ctrlKey || e.metaKey)}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-text-muted">{getEntityIcon(entity.type)}</span>
-          <span className="text-sm text-text-primary truncate">{entity.name}</span>
+          <span className={isSelected ? 'text-primary' : 'text-text-muted'}>{getEntityIcon(entity.type)}</span>
+          <span className="text-sm text-white truncate">{entity.name}</span>
           <span className="text-xs text-text-muted">{entity.objects.length}</span>
         </div>
 
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <MenuTrigger>
             <Button
-              className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-text-primary"
+              className="p-1 hover:bg-white/10 rounded-lg text-text-muted hover:text-white transition-all"
               aria-label="Actions"
             >
               <MoreVertical size={16} />
             </Button>
             <Popover
               placement="bottom end"
-              className="bg-bg-panel border border-border-subtle rounded-lg shadow-xl min-w-40 overflow-hidden"
+              className="bg-bg-panel border border-primary/20 rounded-xl shadow-xl min-w-40 overflow-hidden panel-glow"
             >
               <Menu
                 className="outline-none p-1"
@@ -339,47 +339,47 @@ export function EntityPanel({
               >
                 <MenuItem
                   id="bring-to-front"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary outline-none cursor-pointer rounded hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-white outline-none cursor-pointer rounded-lg hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronsUp size={16} /> Bring to Front
                 </MenuItem>
                 <MenuItem
                   id="bring-forward"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary outline-none cursor-pointer rounded hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-white outline-none cursor-pointer rounded-lg hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronUp size={16} /> Bring Forward
                 </MenuItem>
                 <MenuItem
                   id="send-backward"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary outline-none cursor-pointer rounded hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-white outline-none cursor-pointer rounded-lg hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronDown size={16} /> Send Backward
                 </MenuItem>
                 <MenuItem
                   id="send-to-back"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary outline-none cursor-pointer rounded hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-white outline-none cursor-pointer rounded-lg hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronsDown size={16} /> Send to Back
                 </MenuItem>
-                <Separator className="my-1 h-px bg-border-subtle" />
+                <Separator className="my-1 h-px bg-primary/10" />
                 {entity.isSVG && (
                   <MenuItem
                     id="edit-svg"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary outline-none cursor-pointer rounded hover:bg-white/10"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-white outline-none cursor-pointer rounded-lg hover:bg-white/10 transition-all"
                   >
                     <FileCode size={16} /> Edit SVG
                   </MenuItem>
                 )}
                 <MenuItem
                   id="duplicate"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary outline-none cursor-pointer rounded hover:bg-white/10"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-white outline-none cursor-pointer rounded-lg hover:bg-white/10 transition-all"
                 >
                   <Copy size={16} /> Duplicate
                 </MenuItem>
-                <Separator className="my-1 h-px bg-border-subtle" />
+                <Separator className="my-1 h-px bg-primary/10" />
                 <MenuItem
                   id="delete"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-accent-coral outline-none cursor-pointer rounded hover:bg-accent-coral/20"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-accent-coral outline-none cursor-pointer rounded-lg hover:bg-accent-coral/20 transition-all"
                 >
                   <Trash2 size={16} /> Delete
                 </MenuItem>
@@ -401,15 +401,15 @@ export function EntityPanel({
         {/* Group header */}
         <div
           className={`
-            flex items-center justify-between px-3 py-2 rounded
-            transition-colors cursor-pointer
-            ${allSelected ? 'bg-accent-teal/20' : someSelected ? 'bg-accent-teal/10' : 'hover:bg-white/5'}
+            flex items-center justify-between px-3 py-2 rounded-lg
+            transition-all cursor-pointer
+            ${allSelected ? 'bg-primary/20 shadow-[0_0_10px_rgba(45,212,168,0.1)]' : someSelected ? 'bg-primary/10' : 'hover:bg-white/5'}
           `}
           onClick={(e) => handleSelectGroup(group, e.shiftKey || e.ctrlKey || e.metaKey)}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <button
-              className="p-0.5 hover:bg-white/10 rounded text-text-muted"
+              className="p-0.5 hover:bg-white/10 rounded-lg text-text-muted transition-all"
               onClick={(e) => {
                 e.stopPropagation()
                 toggleGroupExpanded(group.id)
@@ -417,27 +417,27 @@ export function EntityPanel({
             >
               <ChevronRight
                 size={14}
-                className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                className={`transition-transform ${isExpanded ? 'rotate-90 text-primary' : ''}`}
               />
             </button>
-            <span className="text-accent-teal">
+            <span className="text-primary">
               <FolderOpen size={16} />
             </span>
-            <span className="text-sm text-text-primary truncate">{group.name}</span>
+            <span className="text-sm text-white truncate">{group.name}</span>
             <span className="text-xs text-text-muted">({members.length})</span>
           </div>
 
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <MenuTrigger>
               <Button
-                className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-text-primary"
+                className="p-1 hover:bg-white/10 rounded-lg text-text-muted hover:text-white transition-all"
                 aria-label="Group actions"
               >
                 <MoreVertical size={16} />
               </Button>
               <Popover
                 placement="bottom end"
-                className="bg-bg-panel border border-border-subtle rounded-lg shadow-xl min-w-40 overflow-hidden"
+                className="bg-bg-panel border border-primary/20 rounded-xl shadow-xl min-w-40 overflow-hidden panel-glow"
               >
                 <Menu
                   className="outline-none p-1"
@@ -446,14 +446,26 @@ export function EntityPanel({
                       // Select the group first, then ungroup
                       onSelectionChange?.(new Set(group.memberMirrorGroupIds))
                       onUngroupSelected?.()
+                    } else if (key === 'delete') {
+                      // Delete the group and all its children
+                      if (entityGroupManager) {
+                        entityGroupManager.deleteGroup(group.id, true)
+                      }
                     }
                   }}
                 >
                   <MenuItem
                     id="ungroup"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary outline-none cursor-pointer rounded hover:bg-white/10"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-white outline-none cursor-pointer rounded-lg hover:bg-white/10 transition-all"
                   >
                     <Ungroup size={16} /> Ungroup
+                  </MenuItem>
+                  <Separator className="my-1 h-px bg-primary/10" />
+                  <MenuItem
+                    id="delete"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-accent-coral outline-none cursor-pointer rounded-lg hover:bg-accent-coral/20 transition-all"
+                  >
+                    <Trash2 size={16} /> Delete Group
                   </MenuItem>
                 </Menu>
               </Popover>
@@ -479,7 +491,7 @@ export function EntityPanel({
           <Button
             onPress={onGroupSelected}
             isDisabled={selectedEntityIds.size < 2}
-            className="px-2 py-1 text-xs rounded transition-colors bg-white/5 text-text-muted hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2 py-1 text-xs rounded-lg transition-all bg-white/5 text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label="Group selected (Ctrl+G)"
           >
             <Group size={14} />
@@ -487,17 +499,17 @@ export function EntityPanel({
           <Button
             onPress={onUngroupSelected}
             isDisabled={!hasSelectedGroup}
-            className="px-2 py-1 text-xs rounded transition-colors bg-white/5 text-text-muted hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2 py-1 text-xs rounded-lg transition-all bg-white/5 text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label="Ungroup (Ctrl+Shift+G)"
           >
             <Ungroup size={14} />
           </Button>
           <Button
             onPress={() => setShowOnlyCurrentLayer(!showOnlyCurrentLayer)}
-            className={`px-2 py-1 text-xs rounded transition-colors ${
+            className={`px-2 py-1 text-xs rounded-lg transition-all ${
               showOnlyCurrentLayer
-                ? 'bg-accent-teal/20 text-accent-teal'
-                : 'bg-white/5 text-text-muted hover:bg-white/10'
+                ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
+                : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
             }`}
             aria-label={showOnlyCurrentLayer ? 'Show all layers' : 'Show current layer only'}
           >

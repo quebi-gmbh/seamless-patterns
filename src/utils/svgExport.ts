@@ -23,9 +23,34 @@ export function getCenterTileObjects(canvas: FabricCanvasType): ExtendedFabricOb
 }
 
 /**
+ * Detect if canvas is using virtual tiling mode.
+ * In virtual tiling mode, all canonical objects have tilePosition [0,0].
+ * In legacy mode, objects exist at all 25 tile positions.
+ */
+function isVirtualTilingMode(canvas: FabricCanvasType): boolean {
+  const tiledObjects = canvas.getObjects().filter((obj) => {
+    const extObj = obj as ExtendedFabricObject
+    return (obj as any).gridLine !== true && extObj.tiledMetadata?.tilePosition !== undefined
+  })
+
+  if (tiledObjects.length === 0) return false
+
+  // Check if ALL objects are at tile [0,0] - this indicates virtual tiling mode
+  // In legacy mode, there would be objects at other tile positions too
+  return tiledObjects.every((obj) => {
+    const extObj = obj as ExtendedFabricObject
+    const pos = extObj.tiledMetadata?.tilePosition
+    return pos && pos[0] === 0 && pos[1] === 0
+  })
+}
+
+/**
  * Generate SVG string from center tile objects
  * Returns SVG with viewBox set to the center tile region
  * Renders all 9 tiles in the 3x3 grid to ensure proper tiling at edges
+ *
+ * Handles both virtual tiling mode (1 canonical object at [0,0]) and
+ * legacy mode (25 copies across 5x5 grid).
  */
 export function generateCenterTileSVG(
   canvas: FabricCanvasType,
@@ -54,13 +79,22 @@ export function generateCenterTileSVG(
   gridLines.forEach(obj => obj.set({ visible: false }))
   canvas.requestRenderAll()
 
+  // Detect if we're in virtual tiling mode
+  const virtualMode = isVirtualTilingMode(canvas)
+
   try {
-    // Generate SVG with viewBox set to center tile coordinates
-    // The canvas contains a 3x3 grid, center tile is at [tileSize, tileSize]
+    // Determine the viewBox based on tiling mode:
+    // - Virtual tiling: canonical objects are at [0, tileSize) range (tile [0,0])
+    // - Legacy mode: objects exist at center tile [tileSize, 2*tileSize) (tile [1,1] in 5x5 grid)
+    //   but we actually have copies at all tiles, so we target [tileSize, tileSize]
+    const viewBoxX = virtualMode ? 0 : tileSize
+    const viewBoxY = virtualMode ? 0 : tileSize
+
+    // Generate SVG with viewBox set to the appropriate tile
     const svgString = canvas.toSVG({
       viewBox: {
-        x: tileSize,
-        y: tileSize,
+        x: viewBoxX,
+        y: viewBoxY,
         width: tileSize,
         height: tileSize
       },

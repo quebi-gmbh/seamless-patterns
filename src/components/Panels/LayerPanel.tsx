@@ -90,10 +90,10 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-text-primary">Layers</span>
+        <span className="text-sm font-medium text-white">Layers</span>
         <Button
           onPress={handleCreateLayer}
-          className="p-1.5 bg-accent-teal hover:bg-accent-teal/90 rounded transition-colors"
+          className="p-1.5 bg-primary hover:bg-primary-light rounded-lg transition-all text-bg-dark shadow-[0_0_10px_rgba(45,212,168,0.2)] hover:shadow-[0_0_15px_rgba(45,212,168,0.4)]"
           aria-label="Create new layer"
         >
           <Plus size={16} />
@@ -116,18 +116,18 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
             id={layer.id}
             textValue={layer.name}
             className={({ isSelected, isFocusVisible }) => `
-              group flex items-center gap-2 px-3 py-2 rounded
-              transition-colors cursor-pointer
-              ${isSelected ? 'bg-accent-teal/20' : 'hover:bg-white/5'}
-              ${isFocusVisible ? 'ring-2 ring-accent-teal' : ''}
+              group flex items-center gap-2 px-3 py-2 rounded-lg
+              transition-all cursor-pointer
+              ${isSelected ? 'bg-primary/20 shadow-[0_0_10px_rgba(45,212,168,0.1)]' : 'hover:bg-white/5'}
+              ${isFocusVisible ? 'ring-2 ring-primary' : ''}
               ${layer.locked ? 'opacity-60' : ''}
             `}
           >
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <Button
                 onPress={() => handleToggleVisibility(layer.id)}
-                className={`p-1 hover:bg-white/10 rounded ${
-                  layer.visible ? '' : 'opacity-50'
+                className={`p-1 hover:bg-white/10 rounded-lg transition-all ${
+                  layer.visible ? 'text-primary' : 'opacity-50'
                 }`}
                 aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
               >
@@ -136,7 +136,7 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
 
               <Button
                 onPress={() => handleToggleLock(layer.id)}
-                className={`p-1 hover:bg-white/10 rounded ${
+                className={`p-1 hover:bg-white/10 rounded-lg transition-all ${
                   layer.locked ? 'text-accent-coral' : ''
                 }`}
                 aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
@@ -159,11 +159,11 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
                   className="w-full"
                   aria-label="Layer name"
                 >
-                  <Input className="w-full px-2 py-1 bg-white/10 border border-border-subtle rounded text-sm focus:ring-2 focus:ring-accent-teal outline-none" />
+                  <Input className="w-full px-2 py-1 bg-white/10 border border-primary/20 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none" />
                 </TextField>
               ) : (
                 <span
-                  className="text-sm text-text-primary truncate block"
+                  className="text-sm text-white truncate block"
                   onDoubleClick={(e) => {
                     e.stopPropagation()
                     handleStartRename(layer)
@@ -178,7 +178,7 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
               <Button
                 onPress={() => handleMoveUp(index)}
                 isDisabled={index === 0}
-                className="p-1 hover:bg-white/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1 hover:bg-white/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="Move layer up"
               >
                 <ChevronUp size={14} />
@@ -186,14 +186,14 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
               <Button
                 onPress={() => handleMoveDown(index)}
                 isDisabled={index === layers.length - 1}
-                className="p-1 hover:bg-white/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1 hover:bg-white/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="Move layer down"
               >
                 <ChevronDown size={14} />
               </Button>
               <Button
                 onPress={() => handleDeleteLayer(layer.id)}
-                className="p-1 hover:bg-accent-coral/20 text-accent-coral rounded"
+                className="p-1 hover:bg-accent-coral/20 text-accent-coral rounded-lg transition-all"
                 aria-label="Delete layer"
               >
                 <Trash2 size={14} />

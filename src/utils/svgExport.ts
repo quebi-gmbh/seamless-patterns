@@ -2,27 +2,6 @@ import type { Canvas as FabricCanvasType } from 'fabric'
 import type { ExtendedFabricObject } from '../types/FabricExtensions'
 
 /**
- * Get all objects that belong to the center tile (position [0, 0])
- * Excludes grid lines and non-tiled objects
- */
-export function getCenterTileObjects(canvas: FabricCanvasType): ExtendedFabricObject[] {
-  return canvas.getObjects().filter((obj) => {
-    const extObj = obj as ExtendedFabricObject
-
-    // Exclude grid lines
-    if ((obj as any).gridLine === true) {
-      return false
-    }
-
-    // Only include objects at tile position [0, 0]
-    const tilePos = extObj.tiledMetadata?.tilePosition
-    if (!tilePos) return false
-
-    return tilePos[0] === 0 && tilePos[1] === 0
-  }) as ExtendedFabricObject[]
-}
-
-/**
  * Detect if canvas is using virtual tiling mode.
  * In virtual tiling mode, all canonical objects have tilePosition [0,0].
  * In legacy mode, objects exist at all 25 tile positions.

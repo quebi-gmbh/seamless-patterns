@@ -1143,7 +1143,7 @@ function App() {
       <header className="flex items-center px-6 py-4 bg-bg-panel/80 backdrop-blur-sm border-b border-primary/10">
         <div className="flex items-center gap-3">
           <span className="text-2xl text-primary">◫</span>
-          <span className="text-xl font-semibold text-white">Endless Tiles</span>
+          <span className="text-xl font-semibold text-white">Seamless Patterns</span>
         </div>
       </header>
 

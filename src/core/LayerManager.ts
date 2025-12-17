@@ -327,9 +327,6 @@ export class LayerManager {
 
   /**
    * Get SVG code from a mirror group (if it's an SVG group)
-   */
-  /**
-   * Get SVG code from a mirror group (if it's an SVG group)
    * Returns inner content only (without root <svg> tag)
    */
   getSVGCode(mirrorGroupId: string): string | null {

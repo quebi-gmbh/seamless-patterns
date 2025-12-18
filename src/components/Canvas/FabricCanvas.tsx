@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react'
-import { useFabricCanvas, type VirtualTilingContext } from '../../hooks/useFabricCanvas'
+import { useFabricCanvas, type VirtualTilingContext, type LayerBackground } from '../../hooks/useFabricCanvas'
 
 interface FabricCanvasProps {
   className?: string
@@ -7,6 +7,7 @@ interface FabricCanvasProps {
   tileSize?: number
   onCanvasReady?: (canvas: import('fabric').Canvas, virtualTilingContext: VirtualTilingContext) => void
   onAfterRender?: () => void
+  layerBackgrounds?: LayerBackground[]
 }
 
 export function FabricCanvas({
@@ -14,12 +15,14 @@ export function FabricCanvas({
   visible = true,
   tileSize = 256,
   onCanvasReady,
-  onAfterRender
+  onAfterRender,
+  layerBackgrounds
 }: FabricCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { fabricCanvas, virtualTilingContext } = useFabricCanvas(canvasRef, {
     tileSize,
-    onAfterRender
+    onAfterRender,
+    layerBackgrounds
   })
 
   useEffect(() => {

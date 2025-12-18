@@ -10,6 +10,8 @@ export interface Layer {
   visible: boolean
   locked: boolean
   order: number
+  backgroundColor?: string  // hex color, undefined = transparent
+  backgroundAlpha?: number  // 0-1, default 1
 }
 
 export class LayerManager {
@@ -139,7 +141,7 @@ export class LayerManager {
   }
 
   /**
-   * Reorder layers
+   * Reorder layers - triggers re-render to update visual order
    */
   reorderLayers(fromIndex: number, toIndex: number): void {
     const layers = this.getLayers()
@@ -150,6 +152,9 @@ export class LayerManager {
     layers.forEach((layer, index) => {
       layer.order = index
     })
+
+    // Trigger re-render to update visual layer order
+    this.canvas.requestRenderAll()
   }
 
   /**

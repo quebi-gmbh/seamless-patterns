@@ -2,20 +2,21 @@ import { useState, useEffect, useCallback } from 'react'
 import { Modal, Dialog, Heading, Button, Label, Slider, SliderTrack, SliderThumb, SliderOutput, Switch } from 'react-aria-components'
 import { X } from 'lucide-react'
 import type { Canvas as FabricCanvasType } from 'fabric'
-import { generateCenterTileSVG, rasterizeSVG, convertFormat, downloadFile } from '../../utils/svgExport'
+import { generateCenterTileSVG, rasterizeSVG, convertFormat, downloadFile, type LayerBackground } from '../../utils/svgExport'
 
 interface ExportDialogProps {
   isOpen: boolean
   onClose: () => void
   fabricCanvas: FabricCanvasType | null
   tileSize: number
+  layerBackgrounds?: LayerBackground[]
 }
 
 type ExportFormat = 'png' | 'jpeg' | 'bmp' | 'svg'
 
 const RESOLUTION_OPTIONS = [128, 256, 512, 1024, 2048, 4096]
 
-export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: ExportDialogProps) {
+export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize, layerBackgrounds = [] }: ExportDialogProps) {
   const [resolution, setResolution] = useState(1024)
   const [format, setFormat] = useState<ExportFormat>('png')
   const [jpegQuality, setJpegQuality] = useState(95)
@@ -26,11 +27,13 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
 
   // Update preview when options change
   const updatePreview = useCallback(async () => {
+    console.log('[ExportDialog] updatePreview called, fabricCanvas:', !!fabricCanvas)
     if (!fabricCanvas) return
 
     try {
-      // Generate SVG from center tile
-      const svgString = generateCenterTileSVG(fabricCanvas, tileSize)
+      // Generate SVG from center tile with layer backgrounds
+      const svgString = await generateCenterTileSVG(fabricCanvas, tileSize, layerBackgrounds)
+      console.log('[ExportDialog] SVG generated, length:', svgString.length)
 
       if (format === 'svg') {
         // For SVG preview, rasterize at fixed preview size (256px)
@@ -47,6 +50,7 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
 
         // Convert format if needed
         if (format === 'png') {
+          console.log('[ExportDialog] Setting PNG preview, dataUrl length:', pngDataUrl.length, 'starts with:', pngDataUrl.substring(0, 50))
           setPreviewDataUrl(pngDataUrl)
         } else if (format === 'jpeg' || format === 'bmp') {
           const finalDataUrl = await convertFormat(
@@ -54,13 +58,14 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
             format,
             format === 'jpeg' ? jpegQuality / 100 : 1
           )
+          console.log('[ExportDialog] Setting converted preview')
           setPreviewDataUrl(finalDataUrl)
         }
       }
     } catch (error) {
-      console.error('Failed to generate preview:', error)
+      console.error('[ExportDialog] Failed to generate preview:', error)
     }
-  }, [fabricCanvas, resolution, format, jpegQuality, imageSmoothingEnabled, tileSize])
+  }, [fabricCanvas, resolution, format, jpegQuality, imageSmoothingEnabled, tileSize, layerBackgrounds])
 
   // Debounced preview update
   useEffect(() => {
@@ -87,7 +92,7 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
     if (!fabricCanvas) return
 
     try {
-      const svgString = generateCenterTileSVG(fabricCanvas, tileSize)
+      const svgString = await generateCenterTileSVG(fabricCanvas, tileSize, layerBackgrounds)
       downloadFile(svgString, generateFileName(), 'image/svg+xml')
     } catch (error) {
       console.error('SVG export failed:', error)
@@ -99,8 +104,8 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
     if (!fabricCanvas) return
 
     try {
-      // Generate SVG first
-      const svgString = generateCenterTileSVG(fabricCanvas, tileSize)
+      // Generate SVG first with layer backgrounds
+      const svgString = await generateCenterTileSVG(fabricCanvas, tileSize, layerBackgrounds)
 
       // Rasterize at target resolution
       const pngDataUrl = await rasterizeSVG(
@@ -297,13 +302,15 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize }: Export
 
               {/* Preview Panel */}
               <div className="w-80 flex flex-col gap-2">
-                <Label className="text-sm font-medium text-text-muted">Preview</Label>
+                <Label className="text-sm font-medium text-text-muted">Preview {previewDataUrl ? `(${previewDataUrl.length} chars)` : '(none)'}</Label>
                 <div className="aspect-square bg-white/5 border border-primary/20 rounded-xl overflow-hidden flex items-center justify-center">
                   {previewDataUrl ? (
                     <img
                       src={previewDataUrl}
                       alt="Export preview"
                       className="w-full h-full object-contain"
+                      onError={(e) => console.error('[ExportDialog] Image load error:', e)}
+                      onLoad={() => console.log('[ExportDialog] Image loaded successfully')}
                     />
                   ) : (
                     <span className="text-sm text-text-muted">Generating preview...</span>

@@ -14,6 +14,9 @@ export interface ProxyMetadata {
   canonicalObjectId: string // ID of the canonical object this proxy represents
   mirrorGroupId: string // mirrorGroupId of the canonical object
   tileOffset: [number, number] // Which tile offset this proxy is positioned at
+  sizeAdjust: [number, number] // [leftAdjust, topAdjust] for min-size centering
+  baseSize: [number, number] // [width, height] of canonical at creation time (before scale)
+  baseScale: [number, number] // [scaleX, scaleY] of canonical at creation time
 }
 
 // Entity group for grouping multiple entities together

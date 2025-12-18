@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Canvas as FabricCanvasType } from 'fabric'
-import { Circle, Rect, FabricImage, loadSVGFromURL, util as fabricUtil, PencilBrush, ActiveSelection } from 'fabric'
+import { Circle, Rect, FabricImage, loadSVGFromURL, util as fabricUtil, PencilBrush, ActiveSelection, Point } from 'fabric'
 import { Button } from 'react-aria-components'
 import { MousePointer2, Brush, Eraser, Square, Circle as CircleIcon, FileUp } from 'lucide-react'
 import { FabricCanvas } from './components/Canvas/FabricCanvas'
@@ -22,7 +22,8 @@ import { usePlacementControls } from './hooks/usePlacementControls'
 import { LayerManager } from './core/LayerManager'
 import { EntityGroupManager } from './core/EntityGroupManager'
 import type { ExtendedFabricObject } from './types/FabricExtensions'
-import type { VirtualTilingContext } from './hooks/useFabricCanvas'
+import type { VirtualTilingContext, LayerBackground } from './hooks/useFabricCanvas'
+import type { Layer } from './core/LayerManager'
 import { exportProjectAsJSON, serializeProject } from './utils/projectExport'
 import { importProjectFromFile, deserializeProject } from './utils/projectImport'
 import { hasAutosave, loadFromLocalStorage, saveToLocalStorage, clearAutosave } from './utils/autoSave'
@@ -52,6 +53,7 @@ function App() {
   const [editingSVGId, setEditingSVGId] = useState<string | null>(null)
   const [editingSVGCode, setEditingSVGCode] = useState<string>('')
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set())
+  const [hoveredEntityIds, setHoveredEntityIds] = useState<Set<string>>(new Set())
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isProjectExportDialogOpen, setIsProjectExportDialogOpen] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
@@ -71,6 +73,23 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(3)
   const [followMode, setFollowMode] = useState<'cursor' | 'object' | 'manual'>('cursor')
 
+  // Drag selection state
+  const [isDragSelecting, setIsDragSelecting] = useState(false)
+  const [dragSelectStart, setDragSelectStart] = useState<{ x: number; y: number } | null>(null)
+  const [dragSelectRect, setDragSelectRect] = useState<Rect | null>(null)
+
+  // Layers state for background rendering
+  const [layers, setLayers] = useState<Layer[]>([])
+
+  // Derive layer backgrounds for canvas rendering
+  const layerBackgrounds: LayerBackground[] = layers
+    .filter(layer => layer.backgroundColor)
+    .map(layer => ({
+      order: layer.order,
+      backgroundColor: layer.backgroundColor!,
+      backgroundAlpha: layer.backgroundAlpha ?? 1
+    }))
+
   // Handle canvas ready callback
   const handleCanvasReady = useCallback((canvas: FabricCanvasType, vtContext: VirtualTilingContext) => {
     setFabricCanvas(canvas)
@@ -85,7 +104,7 @@ function App() {
     setLayerManager(manager)
     setCurrentLayerId(manager.getDefaultLayerId())
 
-    const groupManager = new EntityGroupManager(fabricCanvas, manager)
+    const groupManager = new EntityGroupManager(fabricCanvas, manager, DRAWING_TILE_SIZE)
     setEntityGroupManager(groupManager)
   }, [fabricCanvas, layerManager])
 
@@ -104,6 +123,14 @@ function App() {
       hitTestInterceptor.setLayerManager(layerManager)
     }
   }, [tilingEngine, virtualTilingContext, layerManager])
+
+  // Update VirtualRenderingEngine highlighted objects when hover changes
+  useEffect(() => {
+    if (!virtualTilingContext?.virtualRenderer) return
+
+    virtualTilingContext.virtualRenderer.setHighlightedMirrorGroupIds(hoveredEntityIds)
+    fabricCanvas?.requestRenderAll()
+  }, [hoveredEntityIds, virtualTilingContext, fabricCanvas])
 
   // Auto-save function with debounce
   const triggerAutoSave = useCallback(() => {
@@ -356,7 +383,14 @@ function App() {
       }
     }
 
-    const handleSelectionCleared = () => {
+    const handleSelectionCleared = (e: any) => {
+      // Don't clear selection state if modifier keys are held (user is multi-selecting)
+      const isMultiSelectModifier = e?.e?.shiftKey || e?.e?.ctrlKey || e?.e?.metaKey
+
+      if (isMultiSelectModifier) {
+        return
+      }
+
       setSelectedEntityIds(new Set())
       setSelectedObject(null)
 
@@ -413,34 +447,172 @@ function App() {
       // Get click point
       const pointer = fabricCanvas.getViewportPoint(e.e)
 
+      // Check for multi-select modifiers (Shift or Ctrl/Cmd)
+      const isMultiSelect = e.e.shiftKey || e.e.ctrlKey || e.e.metaKey
+
       // Perform hit test against canonical objects at all tile positions
       const hitResult = hitTestInterceptor.findCanonicalObjectAtPoint(pointer)
 
       if (hitResult) {
         const { canonicalObject, tileOffset } = hitResult
+        const mirrorGroupId = canonicalObject.tiledMetadata?.mirrorGroupId
 
-        // Clear existing proxies
-        selectionProxyManager.clearAll()
+        if (isMultiSelect) {
+          // Multi-select mode: add to or toggle from existing selection
+          const existingProxy = mirrorGroupId ? selectionProxyManager.getProxy(mirrorGroupId) : null
 
-        // Create proxy at the clicked tile offset
-        const proxy = selectionProxyManager.createProxy(canonicalObject, tileOffset)
+          if (existingProxy) {
+            // Object already selected - remove it from selection (toggle behavior)
+            const activeObject = fabricCanvas.getActiveObject()
 
-        // Select the proxy
-        fabricCanvas.setActiveObject(proxy)
+            if (activeObject?.type === 'activeselection') {
+              // Remove from multi-selection
+              const activeSelection = activeObject as ActiveSelection
+              const objects = activeSelection.getObjects().filter(obj => obj !== existingProxy)
+              selectionProxyManager.removeProxy(mirrorGroupId!)
+
+              if (objects.length === 0) {
+                fabricCanvas.discardActiveObject()
+              } else if (objects.length === 1) {
+                fabricCanvas.setActiveObject(objects[0])
+              } else {
+                const newSelection = new ActiveSelection(objects, { canvas: fabricCanvas })
+                fabricCanvas.setActiveObject(newSelection)
+              }
+            } else {
+              // Single selection - just deselect
+              selectionProxyManager.removeProxy(mirrorGroupId!)
+              fabricCanvas.discardActiveObject()
+            }
+          } else {
+            // Object not selected - add it to selection
+            // Get all existing proxies BEFORE creating new one (Fabric may have cleared activeObject)
+            const existingProxies = selectionProxyManager.getAllProxies()
+
+            const proxy = selectionProxyManager.createProxy(canonicalObject, tileOffset)
+
+            if (existingProxies.length > 0) {
+              // Create multi-selection with all existing proxies plus new one
+              const allProxies = [...existingProxies, proxy]
+              const newSelection = new ActiveSelection(allProxies, { canvas: fabricCanvas })
+              fabricCanvas.setActiveObject(newSelection)
+            } else {
+              // No existing proxies - just select the new proxy
+              fabricCanvas.setActiveObject(proxy)
+            }
+          }
+        } else {
+          // Normal click: clear existing proxies and select single object
+          selectionProxyManager.clearAll()
+
+          // Create proxy at the clicked tile offset
+          const proxy = selectionProxyManager.createProxy(canonicalObject, tileOffset)
+
+          // Select the proxy
+          fabricCanvas.setActiveObject(proxy)
+        }
+
         fabricCanvas.requestRenderAll()
 
         // Prevent Fabric from continuing with its default handling
         e.e.preventDefault?.()
         e.e.stopPropagation?.()
+      } else {
+        // No object hit - start drag selection
+        setIsDragSelecting(true)
+        setDragSelectStart(pointer)
+
+        // Create visual selection rectangle
+        const rect = new Rect({
+          left: pointer.x,
+          top: pointer.y,
+          width: 0,
+          height: 0,
+          fill: 'rgba(0, 123, 255, 0.1)',
+          stroke: 'rgba(0, 123, 255, 0.8)',
+          strokeWidth: 1,
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
+        })
+        fabricCanvas.add(rect)
+        setDragSelectRect(rect)
+      }
+    }
+
+    const handleMouseMove = (e: any) => {
+      if (!isDragSelecting || !dragSelectStart || !dragSelectRect) return
+
+      const pointer = fabricCanvas.getViewportPoint(e.e)
+
+      // Calculate rectangle dimensions
+      const left = Math.min(dragSelectStart.x, pointer.x)
+      const top = Math.min(dragSelectStart.y, pointer.y)
+      const width = Math.abs(pointer.x - dragSelectStart.x)
+      const height = Math.abs(pointer.y - dragSelectStart.y)
+
+      dragSelectRect.set({ left, top, width, height })
+      fabricCanvas.requestRenderAll()
+    }
+
+    const handleMouseUp = (e: any) => {
+      if (!isDragSelecting || !dragSelectStart || !dragSelectRect) return
+
+      const pointer = fabricCanvas.getViewportPoint(e.e)
+
+      // Calculate selection bounds
+      const left = Math.min(dragSelectStart.x, pointer.x)
+      const top = Math.min(dragSelectStart.y, pointer.y)
+      const right = Math.max(dragSelectStart.x, pointer.x)
+      const bottom = Math.max(dragSelectStart.y, pointer.y)
+
+      // Remove visual selection rectangle
+      fabricCanvas.remove(dragSelectRect)
+      setDragSelectRect(null)
+      setDragSelectStart(null)
+      setIsDragSelecting(false)
+
+      // Only process if drag was significant (not just a click)
+      if (right - left < 5 && bottom - top < 5) {
+        return
+      }
+
+      // Find all objects within selection rectangle
+      const hitResults = hitTestInterceptor.findCanonicalObjectsInRect(
+        new Point(left, top),
+        new Point(right, bottom)
+      )
+
+      if (hitResults.length > 0) {
+        // Clear existing proxies
+        selectionProxyManager.clearAll()
+
+        // Create proxies for all selected objects
+        const proxies = hitResults.map(({ canonicalObject, tileOffset }) =>
+          selectionProxyManager.createProxy(canonicalObject, tileOffset)
+        )
+
+        if (proxies.length === 1) {
+          fabricCanvas.setActiveObject(proxies[0])
+        } else {
+          const newSelection = new ActiveSelection(proxies, { canvas: fabricCanvas })
+          fabricCanvas.setActiveObject(newSelection)
+        }
+
+        fabricCanvas.requestRenderAll()
       }
     }
 
     fabricCanvas.on('mouse:down', handleMouseDown)
+    fabricCanvas.on('mouse:move', handleMouseMove)
+    fabricCanvas.on('mouse:up', handleMouseUp)
 
     return () => {
       fabricCanvas.off('mouse:down', handleMouseDown)
+      fabricCanvas.off('mouse:move', handleMouseMove)
+      fabricCanvas.off('mouse:up', handleMouseUp)
     }
-  }, [fabricCanvas, virtualTilingContext, tool])
+  }, [fabricCanvas, virtualTilingContext, tool, isDragSelecting, dragSelectStart, dragSelectRect])
 
   // Handle shape drawing (rectangle, circle)
   useEffect(() => {
@@ -574,7 +746,9 @@ function App() {
 
     // Get the underlying HTML canvas element
     // At this point, after:render has completed and virtual copies are drawn
+    // Note: getElement() returns undefined if canvas has been disposed
     const sourceCanvas = fabricCanvas.getElement()
+    if (!sourceCanvas) return
 
     // Account for devicePixelRatio - Fabric.js scales the canvas buffer
     // for retina displays, so we need to scale our extraction coordinates
@@ -1368,6 +1542,7 @@ function App() {
                   tileSize={DRAWING_TILE_SIZE}
                   onCanvasReady={handleCanvasReady}
                   onAfterRender={updateTilePreview}
+                  layerBackgrounds={layerBackgrounds}
                 />
               </div>
             </div>
@@ -1404,6 +1579,7 @@ function App() {
             layerManager={layerManager}
             currentLayerId={currentLayerId}
             onLayerChange={setCurrentLayerId}
+            onLayersChange={setLayers}
           />
           <CollapsiblePanel title="Objects" defaultCollapsed={false}>
             <EntityPanel
@@ -1412,8 +1588,10 @@ function App() {
               entityGroupManager={entityGroupManager}
               currentLayerId={currentLayerId}
               selectedEntityIds={selectedEntityIds}
+              hoveredEntityIds={hoveredEntityIds}
               onSelectEntity={handleSelectEntity}
               onSelectionChange={setSelectedEntityIds}
+              onHoverEntity={setHoveredEntityIds}
               onDuplicateEntity={handleDuplicateEntity}
               onEditSVG={handleEditSVG}
               onGroupSelected={handleGroupSelected}
@@ -1478,6 +1656,7 @@ function App() {
         onClose={() => setIsExportDialogOpen(false)}
         fabricCanvas={fabricCanvas}
         tileSize={DRAWING_TILE_SIZE}
+        layerBackgrounds={layerBackgrounds}
       />
 
       <ProjectExportDialog

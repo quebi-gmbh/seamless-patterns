@@ -8,10 +8,19 @@ export class EntityGroupManager {
   private canvas: Canvas
   private layerManager: LayerManager
   private groups: Map<string, EntityGroup> = new Map()
+  private tileSize: number
 
-  constructor(canvas: Canvas, layerManager: LayerManager) {
+  constructor(canvas: Canvas, layerManager: LayerManager, tileSize: number) {
     this.canvas = canvas
     this.layerManager = layerManager
+    this.tileSize = tileSize
+  }
+
+  /**
+   * Update the tile size (when resolution changes)
+   */
+  setTileSize(tileSize: number): void {
+    this.tileSize = tileSize
   }
 
   /**
@@ -267,9 +276,21 @@ export class EntityGroupManager {
   }
 
   /**
-   * Calculate the bounding box of a group (center tile objects only)
+   * Calculate the bounding box of a group using optimal wrapping.
+   *
+   * Algorithm:
+   * 1. Use the anchor element (clicked object) as the starting point
+   * 2. For each other element, pick the copy (offset by ±tileSize) whose center
+   *    is closest to the anchor's center
+   * 3. Calculate bounding box from the selected positions
+   *
+   * @param groupId - The group ID
+   * @param anchorMirrorGroupId - The mirrorGroupId of the clicked object to use as anchor
    */
-  getGroupBounds(groupId: string): {
+  getGroupBounds(
+    groupId: string,
+    anchorMirrorGroupId?: string
+  ): {
     left: number
     top: number
     width: number
@@ -282,17 +303,74 @@ export class EntityGroupManager {
       return null
     }
 
+    // Get bounds and centers for each object
+    const objectData = centerTileMembers.map((obj) => {
+      const bounds = obj.getBoundingRect()
+      return {
+        obj,
+        bounds,
+        centerX: bounds.left + bounds.width / 2,
+        centerY: bounds.top + bounds.height / 2,
+      }
+    })
+
+    // Find anchor index - use provided mirrorGroupId or fall back to first element
+    let anchorIndex = 0
+    if (anchorMirrorGroupId) {
+      const foundIndex = objectData.findIndex(
+        (data) => data.obj.tiledMetadata?.mirrorGroupId === anchorMirrorGroupId
+      )
+      if (foundIndex !== -1) {
+        anchorIndex = foundIndex
+      }
+    }
+
+    const anchor = objectData[anchorIndex]
+
+    // For each object, find best offset to minimize distance to anchor
+    const selectedBounds: Array<{ left: number; top: number; width: number; height: number }> = []
+    objectData.forEach((data, i) => {
+      if (i === anchorIndex) {
+        selectedBounds.push(data.bounds)
+        return
+      }
+
+      let bestOffsetX = 0
+      let bestOffsetY = 0
+      let bestDist = Infinity
+
+      for (const tx of [-1, 0, 1]) {
+        for (const ty of [-1, 0, 1]) {
+          const shiftedCenterX = data.centerX + tx * this.tileSize
+          const shiftedCenterY = data.centerY + ty * this.tileSize
+          const dist = Math.hypot(shiftedCenterX - anchor.centerX, shiftedCenterY - anchor.centerY)
+          if (dist < bestDist) {
+            bestDist = dist
+            bestOffsetX = tx
+            bestOffsetY = ty
+          }
+        }
+      }
+
+      selectedBounds.push({
+        left: data.bounds.left + bestOffsetX * this.tileSize,
+        top: data.bounds.top + bestOffsetY * this.tileSize,
+        width: data.bounds.width,
+        height: data.bounds.height,
+      })
+    })
+
+    // Calculate final bounding box
     let minX = Infinity
     let minY = Infinity
     let maxX = -Infinity
     let maxY = -Infinity
 
-    centerTileMembers.forEach((obj) => {
-      const bounds = obj.getBoundingRect()
-      minX = Math.min(minX, bounds.left)
-      minY = Math.min(minY, bounds.top)
-      maxX = Math.max(maxX, bounds.left + bounds.width)
-      maxY = Math.max(maxY, bounds.top + bounds.height)
+    selectedBounds.forEach((b) => {
+      minX = Math.min(minX, b.left)
+      minY = Math.min(minY, b.top)
+      maxX = Math.max(maxX, b.left + b.width)
+      maxY = Math.max(maxY, b.top + b.height)
     })
 
     const width = maxX - minX

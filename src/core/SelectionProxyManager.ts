@@ -2,6 +2,9 @@ import { Rect, type Canvas } from 'fabric'
 import type { ExtendedFabricObject, ProxyMetadata } from '../types/FabricExtensions'
 import type { CanonicalObjectStore } from './CanonicalObjectStore'
 
+// Minimum proxy size = 2x default corner handle size (13px) to ensure handles don't overlap
+const MIN_PROXY_SIZE = 26
+
 /**
  * Extended Rect type with proxy metadata
  */
@@ -65,14 +68,30 @@ export class SelectionProxyManager {
     // Get object's bounding box to create appropriately sized proxy
     const bounds = canonical.getBoundingRect()
 
-    // Create transparent proxy rect
+    // Use canonical dimensions, enforcing minimum size for usable controls
+    const scaleX = canonical.scaleX || 1
+    const scaleY = canonical.scaleY || 1
+    const baseWidth = canonical.width || bounds.width
+    const baseHeight = canonical.height || bounds.height
+
+    // Calculate minimum base size needed to achieve MIN_PROXY_SIZE after scaling
+    const minBaseWidth = MIN_PROXY_SIZE / scaleX
+    const minBaseHeight = MIN_PROXY_SIZE / scaleY
+    const proxyBaseWidth = Math.max(baseWidth, minBaseWidth)
+    const proxyBaseHeight = Math.max(baseHeight, minBaseHeight)
+
+    // Center the enlarged proxy over the actual object
+    const leftAdjust = ((proxyBaseWidth - baseWidth) * scaleX) / 2
+    const topAdjust = ((proxyBaseHeight - baseHeight) * scaleY) / 2
+
+    // Create transparent proxy rect that mirrors canonical transforms
     const proxy = new Rect({
-      left: (canonical.left || 0) + offsetX,
-      top: (canonical.top || 0) + offsetY,
-      width: canonical.width || bounds.width,
-      height: canonical.height || bounds.height,
-      scaleX: canonical.scaleX || 1,
-      scaleY: canonical.scaleY || 1,
+      left: (canonical.left || 0) + offsetX - leftAdjust,
+      top: (canonical.top || 0) + offsetY - topAdjust,
+      width: proxyBaseWidth,
+      height: proxyBaseHeight,
+      scaleX: scaleX,
+      scaleY: scaleY,
       angle: canonical.angle || 0,
       flipX: canonical.flipX || false,
       flipY: canonical.flipY || false,
@@ -80,15 +99,18 @@ export class SelectionProxyManager {
       skewY: canonical.skewY || 0,
       originX: canonical.originX || 'left',
       originY: canonical.originY || 'top',
-      fill: 'transparent',
+      fill: 'rgba(0,0,0,0.004)', // Nearly invisible but has pixels for hit detection
       stroke: 'transparent',
-      opacity: 0.01, // Nearly invisible but still renders
       selectable: true,
       evented: true,
       hasControls: true,
       hasBorders: true,
       lockScalingFlip: true,
       uniformScaling: true,
+      moveCursor: 'move',
+      hoverCursor: 'move',
+      perPixelTargetFind: false, // Use bounding box hit detection for proxy
+      objectCaching: false, // Disable caching to ensure fresh hit detection
     }) as unknown as ProxyRect
 
     // Add proxy metadata to link back to canonical
@@ -97,10 +119,15 @@ export class SelectionProxyManager {
       canonicalObjectId: canonical.id || '',
       mirrorGroupId,
       tileOffset,
+      sizeAdjust: [leftAdjust, topAdjust],
+      baseSize: [baseWidth, baseHeight], // Original canonical size (before any proxy enlargement)
+      baseScale: [scaleX, scaleY], // Scale at proxy creation time
     }
 
-    // Add to canvas and track
+    // Add to canvas, bring to front for controls visibility, and calculate coords
     this.canvas.add(proxy)
+    this.canvas.bringObjectToFront(proxy)
+    proxy.setCoords()
     this.activeProxies.set(mirrorGroupId, proxy)
 
     return proxy
@@ -155,7 +182,7 @@ export class SelectionProxyManager {
    * @param proxy - The modified proxy
    */
   syncProxyToCanonical(proxy: ProxyRect): void {
-    const { mirrorGroupId, tileOffset } = proxy.proxyMetadata
+    const { mirrorGroupId, tileOffset, sizeAdjust, baseSize } = proxy.proxyMetadata
     const canonical = this.canonicalStore.get(mirrorGroupId)
 
     if (!canonical) return
@@ -163,20 +190,42 @@ export class SelectionProxyManager {
     const [tx, ty] = tileOffset
     const offsetX = tx * this.tileSize
     const offsetY = ty * this.tileSize
+    const [leftAdjust, topAdjust] = sizeAdjust
+    const [baseWidth, baseHeight] = baseSize
 
-    // Calculate canonical position from proxy position minus tile offset
+    // Get proxy transforms
     const proxyLeft = proxy.left || 0
     const proxyTop = proxy.top || 0
+    const proxyScaleX = proxy.scaleX || 1
+    const proxyScaleY = proxy.scaleY || 1
 
-    // Remove the tile offset to get the position relative to canonical tile
-    let canonicalLeft = proxyLeft - offsetX
-    let canonicalTop = proxyTop - offsetY
+    // The proxy may be enlarged for minimum size - calculate the scale ratio
+    // Proxy width/height might be larger than baseSize, so we need to find the actual scale
+    const proxyBaseWidth = proxy.width || baseWidth
+    const proxyBaseHeight = proxy.height || baseHeight
+    const widthRatio = proxyBaseWidth / baseWidth
+    const heightRatio = proxyBaseHeight / baseHeight
+
+    // New canonical scale = proxy scale (which is relative to proxy's base size)
+    // divided by the enlargement ratio to get back to canonical base size
+    const newScaleX = (proxyScaleX * widthRatio)
+    const newScaleY = (proxyScaleY * heightRatio)
+
+    // Recalculate size adjustment for new scale
+    const minBaseWidth = MIN_PROXY_SIZE / newScaleX
+    const minBaseHeight = MIN_PROXY_SIZE / newScaleY
+    const newProxyBaseWidth = Math.max(baseWidth, minBaseWidth)
+    const newProxyBaseHeight = Math.max(baseHeight, minBaseHeight)
+    const newLeftAdjust = ((newProxyBaseWidth - baseWidth) * newScaleX) / 2
+    const newTopAdjust = ((newProxyBaseHeight - baseHeight) * newScaleY) / 2
+
+    // Remove tile offset and size adjustment to get canonical position
+    let canonicalLeft = proxyLeft - offsetX + leftAdjust
+    let canonicalTop = proxyTop - offsetY + topAdjust
 
     // Normalize position to center tile range [tileSize, 2*tileSize)
     const normalizeToCenter = (val: number): number => {
-      // First get position within any tile [0, tileSize)
       const inTile = ((val % this.tileSize) + this.tileSize) % this.tileSize
-      // Then offset to center tile
       return inTile + this.tileSize
     }
 
@@ -187,14 +236,18 @@ export class SelectionProxyManager {
     canonical.set({
       left: canonicalLeft,
       top: canonicalTop,
-      scaleX: proxy.scaleX,
-      scaleY: proxy.scaleY,
+      scaleX: newScaleX,
+      scaleY: newScaleY,
       angle: proxy.angle,
       flipX: proxy.flipX,
       flipY: proxy.flipY,
       skewX: proxy.skewX,
       skewY: proxy.skewY,
     })
+
+    // Update proxy metadata for future syncs
+    proxy.proxyMetadata.sizeAdjust = [newLeftAdjust, newTopAdjust]
+    proxy.proxyMetadata.baseScale = [newScaleX, newScaleY]
 
     // Update control positions
     canonical.setCoords()
@@ -215,19 +268,40 @@ export class SelectionProxyManager {
     const [tx, ty] = proxy.proxyMetadata.tileOffset
     const offsetX = tx * this.tileSize
     const offsetY = ty * this.tileSize
+    const [baseWidth, baseHeight] = proxy.proxyMetadata.baseSize
 
-    // Update proxy position at tile offset
+    // Get canonical scale
+    const scaleX = canonical.scaleX || 1
+    const scaleY = canonical.scaleY || 1
+
+    // Calculate minimum base size needed to achieve MIN_PROXY_SIZE after scaling
+    const minBaseWidth = MIN_PROXY_SIZE / scaleX
+    const minBaseHeight = MIN_PROXY_SIZE / scaleY
+    const proxyBaseWidth = Math.max(baseWidth, minBaseWidth)
+    const proxyBaseHeight = Math.max(baseHeight, minBaseHeight)
+
+    // Center the enlarged proxy over the actual object
+    const leftAdjust = ((proxyBaseWidth - baseWidth) * scaleX) / 2
+    const topAdjust = ((proxyBaseHeight - baseHeight) * scaleY) / 2
+
+    // Update proxy to match canonical transforms
     proxy.set({
-      left: (canonical.left || 0) + offsetX,
-      top: (canonical.top || 0) + offsetY,
-      scaleX: canonical.scaleX,
-      scaleY: canonical.scaleY,
+      left: (canonical.left || 0) + offsetX - leftAdjust,
+      top: (canonical.top || 0) + offsetY - topAdjust,
+      width: proxyBaseWidth,
+      height: proxyBaseHeight,
+      scaleX: scaleX,
+      scaleY: scaleY,
       angle: canonical.angle,
       flipX: canonical.flipX,
       flipY: canonical.flipY,
       skewX: canonical.skewX,
       skewY: canonical.skewY,
     })
+
+    // Update metadata
+    proxy.proxyMetadata.sizeAdjust = [leftAdjust, topAdjust]
+    proxy.proxyMetadata.baseScale = [scaleX, scaleY]
 
     proxy.setCoords()
   }

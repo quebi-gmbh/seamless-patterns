@@ -173,4 +173,50 @@ export class CanonicalObjectStore {
     }
     return this.cachedReversed
   }
+
+  /**
+   * Get the z-order index of an object (position in insertionOrder array)
+   * Returns -1 if not found
+   */
+  getZOrderIndex(mirrorGroupId: string): number {
+    return this.insertionOrder.indexOf(mirrorGroupId)
+  }
+
+  /**
+   * Set an object's z-order index (position in insertionOrder array)
+   * Used for undo/redo to restore exact positions
+   */
+  setZOrderIndex(mirrorGroupId: string, targetIndex: number): void {
+    const currentIndex = this.insertionOrder.indexOf(mirrorGroupId)
+    if (currentIndex === -1) return
+
+    // Remove from current position
+    this.insertionOrder.splice(currentIndex, 1)
+
+    // Clamp target index to valid range
+    const clampedIndex = Math.max(0, Math.min(targetIndex, this.insertionOrder.length))
+
+    // Insert at target position
+    this.insertionOrder.splice(clampedIndex, 0, mirrorGroupId)
+
+    this.invalidateCache()
+  }
+
+  /**
+   * Add a canonical object at a specific z-order index.
+   * Used for undo/redo to recreate deleted objects at their original position.
+   */
+  addAtIndex(obj: ExtendedFabricObject, mirrorGroupId: string, index: number): void {
+    if (this.objects.has(mirrorGroupId)) {
+      // If it exists, just update the object and move to position
+      this.objects.set(mirrorGroupId, obj)
+      this.setZOrderIndex(mirrorGroupId, index)
+    } else {
+      this.objects.set(mirrorGroupId, obj)
+      // Clamp index to valid range
+      const clampedIndex = Math.max(0, Math.min(index, this.insertionOrder.length))
+      this.insertionOrder.splice(clampedIndex, 0, mirrorGroupId)
+      this.invalidateCache()
+    }
+  }
 }

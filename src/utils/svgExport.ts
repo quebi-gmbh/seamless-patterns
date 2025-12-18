@@ -1,75 +1,90 @@
-import type { Canvas as FabricCanvasType } from 'fabric'
+import type { Canvas as FabricCanvasType, FabricObject } from 'fabric'
 import type { ExtendedFabricObject } from '../types/FabricExtensions'
 
-/**
- * Detect if canvas is using virtual tiling mode.
- * In virtual tiling mode, all canonical objects have tilePosition [0,0].
- * In legacy mode, objects exist at all 25 tile positions.
- */
-function isVirtualTilingMode(canvas: FabricCanvasType): boolean {
-  const tiledObjects = canvas.getObjects().filter((obj) => {
-    const extObj = obj as ExtendedFabricObject
-    return (obj as any).gridLine !== true && extObj.tiledMetadata?.tilePosition !== undefined
-  })
+// Tile offsets for the 3x3 grid (excluding center [0,0])
+const TILE_OFFSETS: [number, number][] = [
+  [-1, -1], [0, -1], [1, -1],
+  [-1, 0],          [1, 0],
+  [-1, 1],  [0, 1],  [1, 1],
+]
 
-  if (tiledObjects.length === 0) return false
-
-  // Check if ALL objects are at tile [0,0] - this indicates virtual tiling mode
-  // In legacy mode, there would be objects at other tile positions too
-  return tiledObjects.every((obj) => {
-    const extObj = obj as ExtendedFabricObject
-    const pos = extObj.tiledMetadata?.tilePosition
-    return pos && pos[0] === 0 && pos[1] === 0
-  })
+export interface LayerBackground {
+  order: number
+  backgroundColor: string
+  backgroundAlpha: number
 }
 
 /**
  * Generate SVG string from center tile objects
  * Returns SVG with viewBox set to the center tile region
- * Renders all 9 tiles in the 3x3 grid to ensure proper tiling at edges
+ * Creates temporary copies at all 9 tile positions for proper tiling
  *
  * Handles both virtual tiling mode (1 canonical object at [0,0]) and
  * legacy mode (25 copies across 5x5 grid).
  */
-export function generateCenterTileSVG(
+export async function generateCenterTileSVG(
   canvas: FabricCanvasType,
-  tileSize: number
-): string {
-  // Get all tiled objects (excluding grid lines)
-  const tiledObjects = canvas.getObjects().filter((obj) => {
+  tileSize: number,
+  layerBackgrounds: LayerBackground[] = []
+): Promise<string> {
+  // Get all canonical tiled objects (excluding grid lines and proxies)
+  const canonicalObjects = canvas.getObjects().filter((obj) => {
     const extObj = obj as ExtendedFabricObject
     const isGridLine = (obj as any).gridLine === true
+    const isProxy = (obj as any).proxyMetadata?.isProxy === true
     const hasTilePosition = extObj.tiledMetadata?.tilePosition !== undefined
 
-    return !isGridLine && hasTilePosition
-  })
+    return !isGridLine && !isProxy && hasTilePosition
+  }) as ExtendedFabricObject[]
 
-  if (tiledObjects.length === 0) {
-    // Return empty SVG for empty canvas
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${tileSize}" height="${tileSize}" viewBox="0 0 ${tileSize} ${tileSize}"><rect width="${tileSize}" height="${tileSize}" fill="#1a1a25"/></svg>`
+  // Generate background rects for layers (sorted by order, lowest first)
+  const sortedBackgrounds = [...layerBackgrounds].sort((a, b) => a.order - b.order)
+  const backgroundRects = sortedBackgrounds
+    .map(bg => `<rect width="${tileSize}" height="${tileSize}" fill="${bg.backgroundColor}" fill-opacity="${bg.backgroundAlpha}"/>`)
+    .join('')
+
+  if (canonicalObjects.length === 0) {
+    // Return empty SVG with layer backgrounds
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${tileSize}" height="${tileSize}" viewBox="0 0 ${tileSize} ${tileSize}"><rect width="${tileSize}" height="${tileSize}" fill="#1a1a25"/>${backgroundRects}</svg>`
   }
 
-  // Get all objects that should be hidden (only grid lines)
-  const gridLines = canvas.getObjects().filter((obj) => {
-    return (obj as any).gridLine === true
+  // Get all objects that should be hidden (grid lines and proxies)
+  const objectsToHide = canvas.getObjects().filter((obj) => {
+    return (obj as any).gridLine === true || (obj as any).proxyMetadata?.isProxy === true
   })
 
-  // Temporarily hide grid lines
-  gridLines.forEach(obj => obj.set({ visible: false }))
+  // Temporarily hide grid lines and proxies
+  objectsToHide.forEach(obj => obj.set({ visible: false }))
+
+  // Create temporary copies at all 8 surrounding tile positions
+  const temporaryCopies: FabricObject[] = []
+
+  for (const canonical of canonicalObjects) {
+    const originalLeft = canonical.left || 0
+    const originalTop = canonical.top || 0
+
+    for (const [tx, ty] of TILE_OFFSETS) {
+      // Clone the object (async in Fabric v6)
+      const copy = await canonical.clone()
+      copy.set({
+        left: originalLeft + tx * tileSize,
+        top: originalTop + ty * tileSize,
+      })
+      // Mark as temporary so we can identify it later
+      ;(copy as any)._isTemporaryCopy = true
+      canvas.add(copy)
+      temporaryCopies.push(copy)
+    }
+  }
+
   canvas.requestRenderAll()
 
-  // Detect if we're in virtual tiling mode
-  const virtualMode = isVirtualTilingMode(canvas)
-
   try {
-    // Determine the viewBox based on tiling mode:
-    // - Virtual tiling: canonical objects are at [0, tileSize) range (tile [0,0])
-    // - Legacy mode: objects exist at center tile [tileSize, 2*tileSize) (tile [1,1] in 5x5 grid)
-    //   but we actually have copies at all tiles, so we target [tileSize, tileSize]
-    const viewBoxX = virtualMode ? 0 : tileSize
-    const viewBoxY = virtualMode ? 0 : tileSize
+    // ViewBox is at center tile [tileSize, 2*tileSize)
+    const viewBoxX = tileSize
+    const viewBoxY = tileSize
 
-    // Generate SVG with viewBox set to the appropriate tile
+    // Generate SVG with viewBox set to the center tile
     const svgString = canvas.toSVG({
       viewBox: {
         x: viewBoxX,
@@ -81,16 +96,34 @@ export function generateCenterTileSVG(
       height: `${tileSize}`
     })
 
-    // Add background color to SVG if not present
-    const withBackground = svgString.replace(
-      '<svg',
-      `<svg style="background-color: #1a1a25"`
-    )
+    // Add base background color and layer backgrounds to SVG
+    // Use regex to find the opening <svg> tag and insert after it
+    let withBackground = svgString
+
+    if (backgroundRects) {
+      // Insert background rects right after the opening <svg ...> tag
+      // The regex matches <svg followed by any attributes until the closing >
+      withBackground = svgString.replace(
+        /(<svg[^>]*>)/,
+        `$1<rect width="${tileSize}" height="${tileSize}" fill="#1a1a25"/>${backgroundRects}`
+      )
+    } else {
+      // Just add the base background
+      withBackground = svgString.replace(
+        /(<svg[^>]*>)/,
+        `$1<rect width="${tileSize}" height="${tileSize}" fill="#1a1a25"/>`
+      )
+    }
 
     return withBackground
   } finally {
+    // Remove temporary copies
+    for (const copy of temporaryCopies) {
+      canvas.remove(copy)
+    }
+
     // Restore visibility
-    gridLines.forEach(obj => obj.set({ visible: true }))
+    objectsToHide.forEach(obj => obj.set({ visible: true }))
     canvas.requestRenderAll()
   }
 }

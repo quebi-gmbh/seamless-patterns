@@ -1,22 +1,27 @@
 import { useEffect, useState } from 'react'
 import { Button, ListBox, ListBoxItem, TextField, Input } from 'react-aria-components'
-import { Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, Trash2, Plus } from 'lucide-react'
+import { Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, Trash2, Plus, Settings } from 'lucide-react'
 import type { LayerManager, Layer } from '../../core/LayerManager'
+import { LayerSettingsDialog } from '../LayerSettingsDialog/LayerSettingsDialog'
 
 interface LayerPanelProps {
   layerManager: LayerManager | null
   currentLayerId: string
   onLayerChange: (layerId: string) => void
+  onLayersChange?: (layers: Layer[]) => void
 }
 
-export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: LayerPanelProps) {
+export function LayerPanel({ layerManager, currentLayerId, onLayerChange, onLayersChange }: LayerPanelProps) {
   const [layers, setLayers] = useState<Layer[]>([])
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [settingsLayerId, setSettingsLayerId] = useState<string | null>(null)
 
   const refreshLayers = () => {
     if (!layerManager) return
-    setLayers(layerManager.getLayers())
+    const updatedLayers = layerManager.getLayers()
+    setLayers(updatedLayers)
+    onLayersChange?.(updatedLayers)
   }
 
   useEffect(() => {
@@ -192,6 +197,13 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
                 <ChevronDown size={14} />
               </Button>
               <Button
+                onPress={() => setSettingsLayerId(layer.id)}
+                className="p-1 hover:bg-white/10 rounded-lg transition-all"
+                aria-label="Layer settings"
+              >
+                <Settings size={14} />
+              </Button>
+              <Button
                 onPress={() => handleDeleteLayer(layer.id)}
                 className="p-1 hover:bg-accent-coral/20 text-accent-coral rounded-lg transition-all"
                 aria-label="Delete layer"
@@ -202,6 +214,17 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange }: Laye
           </ListBoxItem>
         ))}
       </ListBox>
+
+      <LayerSettingsDialog
+        isOpen={settingsLayerId !== null}
+        onClose={() => setSettingsLayerId(null)}
+        layer={settingsLayerId ? layers.find(l => l.id === settingsLayerId) ?? null : null}
+        onUpdate={(layerId, updates) => {
+          if (!layerManager) return
+          layerManager.updateLayer(layerId, updates)
+          refreshLayers()
+        }}
+      />
     </div>
   )
 }

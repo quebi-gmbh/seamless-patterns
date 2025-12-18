@@ -1,6 +1,10 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import type { Canvas } from 'fabric'
 import type { ExtendedFabricObject } from '../types/FabricExtensions'
+import type { UndoRedoManager } from '../core/UndoRedoManager'
+import type { ObjectSnapshot } from '../core/commands/types'
+import { TransformCommand } from '../core/commands/TransformCommand'
+import { captureObjectSnapshot } from '../core/commands/utils'
 
 interface PlacementControlsOptions {
   canvas: Canvas | null
@@ -8,6 +12,7 @@ interface PlacementControlsOptions {
   snapToGrid: boolean
   gridSize: number
   enabled: boolean
+  undoRedoManager?: UndoRedoManager | null
 }
 
 export function usePlacementControls({
@@ -16,7 +21,11 @@ export function usePlacementControls({
   snapToGrid,
   gridSize,
   enabled,
+  undoRedoManager,
 }: PlacementControlsOptions) {
+  // Track before state for panel-driven changes
+  const beforeSnapshotRef = useRef<ObjectSnapshot | null>(null)
+
   /**
    * Snap a value to the nearest grid point
    */
@@ -29,11 +38,55 @@ export function usePlacementControls({
   )
 
   /**
+   * Capture snapshot before making changes
+   */
+  const captureBeforeState = useCallback(() => {
+    if (!selectedObject || !undoRedoManager) return
+    const canonicalStore = undoRedoManager.getDependencies().canonicalStore
+    beforeSnapshotRef.current = captureObjectSnapshot(selectedObject, canonicalStore)
+  }, [selectedObject, undoRedoManager])
+
+  /**
+   * Create undo command if state changed
+   */
+  const createUndoCommand = useCallback(() => {
+    if (!selectedObject || !undoRedoManager || !beforeSnapshotRef.current) return
+    if (undoRedoManager.isInTransaction()) return
+
+    const mirrorGroupId = selectedObject.tiledMetadata?.mirrorGroupId
+    if (!mirrorGroupId) return
+
+    const canonicalStore = undoRedoManager.getDependencies().canonicalStore
+    const afterSnapshot = captureObjectSnapshot(selectedObject, canonicalStore)
+
+    // Check if anything changed
+    const b = beforeSnapshotRef.current.properties
+    const a = afterSnapshot.properties
+    const hasChanged = b.left !== a.left || b.top !== a.top ||
+      b.scaleX !== a.scaleX || b.scaleY !== a.scaleY ||
+      b.angle !== a.angle || b.flipX !== a.flipX || b.flipY !== a.flipY
+
+    if (hasChanged) {
+      const command = new TransformCommand(
+        mirrorGroupId,
+        beforeSnapshotRef.current,
+        afterSnapshot,
+        undoRedoManager.getDependencies()
+      )
+      undoRedoManager.execute(command)
+    }
+
+    beforeSnapshotRef.current = null
+  }, [selectedObject, undoRedoManager])
+
+  /**
    * Update object position with snap-to-grid support
    */
   const updatePosition = useCallback(
     (x: number, y: number) => {
       if (!canvas || !selectedObject) return
+
+      captureBeforeState()
 
       const snappedX = snapValue(x)
       const snappedY = snapValue(y)
@@ -48,8 +101,10 @@ export function usePlacementControls({
 
       // Trigger object:modified event to sync mirrors
       canvas.fire('object:modified', { target: selectedObject })
+
+      createUndoCommand()
     },
-    [canvas, selectedObject, snapValue]
+    [canvas, selectedObject, snapValue, captureBeforeState, createUndoCommand]
   )
 
   /**
@@ -58,6 +113,8 @@ export function usePlacementControls({
   const updateRotation = useCallback(
     (angle: number) => {
       if (!canvas || !selectedObject) return
+
+      captureBeforeState()
 
       // Normalize angle to 0-360 range
       const normalizedAngle = ((angle % 360) + 360) % 360
@@ -68,8 +125,10 @@ export function usePlacementControls({
 
       // Trigger object:modified event to sync mirrors
       canvas.fire('object:modified', { target: selectedObject })
+
+      createUndoCommand()
     },
-    [canvas, selectedObject]
+    [canvas, selectedObject, captureBeforeState, createUndoCommand]
   )
 
   /**
@@ -78,6 +137,8 @@ export function usePlacementControls({
   const updateScale = useCallback(
     (scaleX: number, scaleY: number) => {
       if (!canvas || !selectedObject) return
+
+      captureBeforeState()
 
       selectedObject.set({
         scaleX: Math.max(0.1, scaleX),
@@ -89,8 +150,10 @@ export function usePlacementControls({
 
       // Trigger object:modified event to sync mirrors
       canvas.fire('object:modified', { target: selectedObject })
+
+      createUndoCommand()
     },
-    [canvas, selectedObject]
+    [canvas, selectedObject, captureBeforeState, createUndoCommand]
   )
 
   /**
@@ -100,14 +163,18 @@ export function usePlacementControls({
     (flipX: boolean, flipY: boolean) => {
       if (!canvas || !selectedObject) return
 
+      captureBeforeState()
+
       selectedObject.set({ flipX, flipY })
       selectedObject.setCoords()
       canvas.requestRenderAll()
 
       // Trigger object:modified event to sync mirrors
       canvas.fire('object:modified', { target: selectedObject })
+
+      createUndoCommand()
     },
-    [canvas, selectedObject]
+    [canvas, selectedObject, captureBeforeState, createUndoCommand]
   )
 
   /**

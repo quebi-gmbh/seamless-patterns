@@ -63,15 +63,16 @@ export class HitTestInterceptor {
   }
 
   /**
-   * Find the canonical object at a given point, considering all 9 tile positions.
-   * Returns the hit object and which tile offset was clicked.
+   * Find the canonical object at a given point, considering all tile positions.
+   * Uses pixel-perfect hit detection and selects the smallest object (by bounding box area)
+   * when multiple objects have opaque pixels at the click point.
    *
    * @param point - The click point in canvas coordinates
    * @returns HitResult if an object was hit, null otherwise
    */
   findCanonicalObjectAtPoint(point: Point): HitResult | null {
-    // Iterate objects in reverse z-order (top to bottom) so topmost object wins
-    const objects = this.canonicalStore.getAllReversed()
+    const candidates: Array<{ result: HitResult; area: number }> = []
+    const objects = this.canonicalStore.getAll()
 
     // Determine which tile was clicked (0, 1, or 2 for each axis)
     const clickedTileX = Math.floor(point.x / this.tileSize)
@@ -96,16 +97,26 @@ export class HitTestInterceptor {
           y: point.y - offsetY,
         }
 
+        // Quick bounding box check first (cheap)
         if (obj.containsPoint(localPoint as Point)) {
-          return {
-            canonicalObject: obj,
-            tileOffset: [tx, ty],
+          // Pixel-perfect check (expensive, only if bounding box passes)
+          if (this.isPixelOpaqueAtPoint(obj, localPoint as Point)) {
+            const bounds = obj.getBoundingRect()
+            candidates.push({
+              result: { canonicalObject: obj, tileOffset: [tx, ty] },
+              area: bounds.width * bounds.height,
+            })
+            break // Only count each object once (use first tile position hit)
           }
         }
       }
     }
 
-    return null
+    if (candidates.length === 0) return null
+
+    // Sort by area (smallest first) and return smallest
+    candidates.sort((a, b) => a.area - b.area)
+    return candidates[0].result
   }
 
   /**
@@ -129,14 +140,15 @@ export class HitTestInterceptor {
   }
 
   /**
-   * Find all canonical objects at a given point (for multi-select scenarios)
+   * Find all canonical objects at a given point (for multi-select scenarios).
+   * Uses pixel-perfect hit detection and returns results sorted by bounding box area (smallest first).
    *
    * @param point - The click point in canvas coordinates
-   * @returns Array of HitResults for all objects at this point
+   * @returns Array of HitResults for all objects at this point, sorted by area (smallest first)
    */
   findAllCanonicalObjectsAtPoint(point: Point): HitResult[] {
-    const results: HitResult[] = []
-    const objects = this.canonicalStore.getAllReversed()
+    const candidates: Array<{ result: HitResult; area: number }> = []
+    const objects = this.canonicalStore.getAll()
 
     for (const obj of objects) {
       if (!this.isInteractable(obj)) continue
@@ -150,26 +162,34 @@ export class HitTestInterceptor {
           y: point.y - offsetY,
         }
 
+        // Quick bounding box check first (cheap)
         if (obj.containsPoint(localPoint as Point)) {
-          results.push({
-            canonicalObject: obj,
-            tileOffset: [tx, ty],
-          })
-          // Only count each object once (use first tile position hit)
-          break
+          // Pixel-perfect check (expensive, only if bounding box passes)
+          if (this.isPixelOpaqueAtPoint(obj, localPoint as Point)) {
+            const bounds = obj.getBoundingRect()
+            candidates.push({
+              result: { canonicalObject: obj, tileOffset: [tx, ty] },
+              area: bounds.width * bounds.height,
+            })
+            // Only count each object once (use first tile position hit)
+            break
+          }
         }
       }
     }
 
-    return results
+    // Sort by area (smallest first)
+    candidates.sort((a, b) => a.area - b.area)
+    return candidates.map(c => c.result)
   }
 
   /**
-   * Find objects within a rectangular selection area
+   * Find objects fully contained within a rectangular selection area.
+   * Objects must be entirely inside the rectangle to be selected (not just intersecting).
    *
    * @param topLeft - Top-left corner of selection
    * @param bottomRight - Bottom-right corner of selection
-   * @returns Array of HitResults for objects within the selection
+   * @returns Array of HitResults for objects fully contained in the selection
    */
   findCanonicalObjectsInRect(
     topLeft: Point,
@@ -192,14 +212,14 @@ export class HitTestInterceptor {
         const objRight = objLeft + bounds.width
         const objBottom = objTop + bounds.height
 
-        // Check if object intersects with selection rectangle
-        const intersects =
-          objLeft < bottomRight.x &&
-          objRight > topLeft.x &&
-          objTop < bottomRight.y &&
-          objBottom > topLeft.y
+        // Check if object is fully contained within selection rectangle
+        const isFullyContained =
+          objLeft >= topLeft.x &&
+          objRight <= bottomRight.x &&
+          objTop >= topLeft.y &&
+          objBottom <= bottomRight.y
 
-        if (intersects) {
+        if (isFullyContained) {
           results.push({
             canonicalObject: obj,
             tileOffset: [tx, ty],
@@ -211,6 +231,45 @@ export class HitTestInterceptor {
     }
 
     return results
+  }
+
+  /**
+   * Check if a pixel at the given point is opaque (non-transparent) on the object.
+   * Renders the object to a temporary canvas and checks the alpha channel.
+   *
+   * @param obj - The object to check
+   * @param localPoint - The point in the object's coordinate space
+   * @returns true if the pixel has any opacity (alpha > 0)
+   */
+  private isPixelOpaqueAtPoint(obj: ExtendedFabricObject, localPoint: Point): boolean {
+    // Get object bounds
+    const bounds = obj.getBoundingRect()
+
+    // Create temp canvas sized to object
+    const tempCanvas = document.createElement('canvas')
+    tempCanvas.width = Math.ceil(bounds.width) || 1
+    tempCanvas.height = Math.ceil(bounds.height) || 1
+    const ctx = tempCanvas.getContext('2d')
+    if (!ctx) return true // Fallback to bounding box behavior
+
+    // Translate so object renders correctly in temp canvas
+    ctx.save()
+    ctx.translate(-bounds.left, -bounds.top)
+    obj.render(ctx)
+    ctx.restore()
+
+    // Calculate pixel position relative to temp canvas
+    const px = Math.floor(localPoint.x - bounds.left)
+    const py = Math.floor(localPoint.y - bounds.top)
+
+    // Bounds check
+    if (px < 0 || py < 0 || px >= tempCanvas.width || py >= tempCanvas.height) {
+      return false
+    }
+
+    // Check alpha channel
+    const imageData = ctx.getImageData(px, py, 1, 1)
+    return imageData.data[3] > 0 // Any non-zero alpha counts as opaque
   }
 
   /**

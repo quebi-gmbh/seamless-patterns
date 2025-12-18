@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Modal, Dialog, Heading, Button, TextField, Label, Input } from 'react-aria-components'
 import { X } from 'lucide-react'
+import { Tooltip } from '../ui/Tooltip'
 
 interface ProjectExportDialogProps {
   isOpen: boolean
@@ -48,13 +49,15 @@ export function ProjectExportDialog({ isOpen, onClose, onExport }: ProjectExport
           <>
             <div className="flex items-center justify-between px-6 py-4 border-b border-primary/10">
               <Heading className="text-lg font-semibold text-white">Export Project</Heading>
-              <Button
-                onPress={close}
-                className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-text-muted hover:text-white"
-                aria-label="Close dialog"
-              >
-                <X size={18} />
-              </Button>
+              <Tooltip content="Close">
+                <Button
+                  onPress={close}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-text-muted hover:text-white"
+                  aria-label="Close dialog"
+                >
+                  <X size={18} />
+                </Button>
+              </Tooltip>
             </div>
 
             <div className="px-6 py-4 flex flex-col gap-4">

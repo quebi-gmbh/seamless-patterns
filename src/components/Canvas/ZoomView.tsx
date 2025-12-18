@@ -1,6 +1,7 @@
 import { useZoomView } from '../../hooks/useZoomView'
 import { Button } from 'react-aria-components'
 import { MousePointer, Crosshair, Move } from 'lucide-react'
+import { Tooltip } from '../ui/Tooltip'
 import type { Canvas } from 'fabric'
 import type { ExtendedFabricObject } from '../../types/FabricExtensions'
 
@@ -77,40 +78,46 @@ export function ZoomView({
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium uppercase tracking-wider text-text-muted">Follow</label>
           <div className="grid grid-cols-3 gap-2">
-            <Button
-              className={`p-2 rounded border transition-all flex items-center justify-center ${
-                followMode === 'cursor'
-                  ? 'bg-accent-teal border-accent-teal'
-                  : 'bg-bg-dark border-border-subtle hover:border-text-muted'
-              }`}
-              onPress={() => onFollowModeChange('cursor')}
-              aria-label="Follow cursor"
-            >
-              <MousePointer size={16} className={followMode === 'cursor' ? 'opacity-100' : 'opacity-60'} />
-            </Button>
-            <Button
-              className={`p-2 rounded border transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed ${
-                followMode === 'object'
-                  ? 'bg-accent-teal border-accent-teal'
-                  : 'bg-bg-dark border-border-subtle hover:border-text-muted'
-              }`}
-              onPress={() => onFollowModeChange('object')}
-              aria-label="Follow selected object"
-              isDisabled={!selectedObject}
-            >
-              <Crosshair size={16} className={followMode === 'object' ? 'opacity-100' : 'opacity-60'} />
-            </Button>
-            <Button
-              className={`p-2 rounded border transition-all flex items-center justify-center ${
-                followMode === 'manual'
-                  ? 'bg-accent-teal border-accent-teal'
-                  : 'bg-bg-dark border-border-subtle hover:border-text-muted'
-              }`}
-              onPress={() => onFollowModeChange('manual')}
-              aria-label="Manual control"
-            >
-              <Move size={16} className={followMode === 'manual' ? 'opacity-100' : 'opacity-60'} />
-            </Button>
+            <Tooltip content="Follow cursor">
+              <Button
+                className={`p-2 rounded border transition-all flex items-center justify-center ${
+                  followMode === 'cursor'
+                    ? 'bg-accent-teal border-accent-teal'
+                    : 'bg-bg-dark border-border-subtle hover:border-text-muted'
+                }`}
+                onPress={() => onFollowModeChange('cursor')}
+                aria-label="Follow cursor"
+              >
+                <MousePointer size={16} className={followMode === 'cursor' ? 'opacity-100' : 'opacity-60'} />
+              </Button>
+            </Tooltip>
+            <Tooltip content="Follow selected object">
+              <Button
+                className={`p-2 rounded border transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed ${
+                  followMode === 'object'
+                    ? 'bg-accent-teal border-accent-teal'
+                    : 'bg-bg-dark border-border-subtle hover:border-text-muted'
+                }`}
+                onPress={() => onFollowModeChange('object')}
+                aria-label="Follow selected object"
+                isDisabled={!selectedObject}
+              >
+                <Crosshair size={16} className={followMode === 'object' ? 'opacity-100' : 'opacity-60'} />
+              </Button>
+            </Tooltip>
+            <Tooltip content="Manual control">
+              <Button
+                className={`p-2 rounded border transition-all flex items-center justify-center ${
+                  followMode === 'manual'
+                    ? 'bg-accent-teal border-accent-teal'
+                    : 'bg-bg-dark border-border-subtle hover:border-text-muted'
+                }`}
+                onPress={() => onFollowModeChange('manual')}
+                aria-label="Manual control"
+              >
+                <Move size={16} className={followMode === 'manual' ? 'opacity-100' : 'opacity-60'} />
+              </Button>
+            </Tooltip>
           </div>
         </div>
       </div>

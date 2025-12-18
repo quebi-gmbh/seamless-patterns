@@ -1,5 +1,6 @@
 export type Tool =
   | 'brush'
+  | 'varioBrush'
   | 'eraser'
   | 'select'
   | 'rectangle'

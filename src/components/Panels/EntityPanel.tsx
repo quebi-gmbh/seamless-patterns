@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from 'react-aria-components'
+import { Tooltip } from '../ui/Tooltip'
 import {
   Square, Circle, Pencil, Image, Package, Diamond,
   Eye, Filter, MoreVertical, ChevronsUp, ChevronUp,
   ChevronDown, ChevronsDown, FileCode, Copy, Trash2,
-  Group, Ungroup, ChevronRight, FolderOpen, GripVertical
+  Group, Ungroup, ChevronRight, FolderOpen, GripVertical,
+  Merge
 } from 'lucide-react'
 import type { Canvas } from 'fabric'
 import type { ExtendedFabricObject } from '../../types/FabricExtensions'
@@ -15,6 +17,7 @@ import type { UndoRedoManager } from '../../core/UndoRedoManager'
 import type { VirtualTilingContext } from '../../hooks/useFabricCanvas'
 import { DeleteCommand } from '../../core/commands/DeleteCommand'
 import { ZOrderCommand, type ZOrderOperation } from '../../core/commands/ZOrderCommand'
+import { canConvertToPath } from '../../lib/svgo/convertShapeToPath'
 
 interface EntityPanelProps {
   fabricCanvas: Canvas | null
@@ -30,6 +33,7 @@ interface EntityPanelProps {
   onEditSVG?: (mirrorGroupId: string, svgCode: string) => void
   onGroupSelected?: () => void
   onUngroupSelected?: () => void
+  onMergePaths?: () => void
   onDuplicateGroup?: (groupId: string) => void
   undoRedoManager?: UndoRedoManager | null
   virtualTilingContext?: VirtualTilingContext | null
@@ -71,6 +75,7 @@ export function EntityPanel({
   onEditSVG,
   onGroupSelected,
   onUngroupSelected,
+  onMergePaths,
   onDuplicateGroup,
   undoRedoManager,
   virtualTilingContext,
@@ -366,6 +371,13 @@ export function EntityPanel({
     const entity = entities.find((e) => e.mirrorGroupId === id)
     return entity?.entityGroupId !== undefined
   })
+
+  // Check if selected entities can be merged (all must be paths or convertible shapes, at least 2)
+  const canMerge = selectedEntityIds.size >= 2 &&
+    Array.from(selectedEntityIds).every((id) => {
+      const entity = entities.find((e) => e.mirrorGroupId === id)
+      return entity?.type && canConvertToPath(entity.type)
+    })
 
   // Drag-and-drop handlers
   const handleDragStart = (e: React.DragEvent, mirrorGroupId: string) => {
@@ -719,33 +731,49 @@ export function EntityPanel({
       <div className="flex items-center justify-between">
         <span className="text-xs text-text-muted">{entities.length} objects</span>
         <div className="flex items-center gap-1">
-          <Button
-            onPress={onGroupSelected}
-            isDisabled={selectedEntityIds.size < 2}
-            className="px-2 py-1 text-xs rounded-lg transition-all bg-white/5 text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Group selected (Ctrl+G)"
-          >
-            <Group size={14} />
-          </Button>
-          <Button
-            onPress={onUngroupSelected}
-            isDisabled={!hasSelectedGroup}
-            className="px-2 py-1 text-xs rounded-lg transition-all bg-white/5 text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Ungroup (Ctrl+Shift+G)"
-          >
-            <Ungroup size={14} />
-          </Button>
-          <Button
-            onPress={() => setShowOnlyCurrentLayer(!showOnlyCurrentLayer)}
-            className={`px-2 py-1 text-xs rounded-lg transition-all ${
-              showOnlyCurrentLayer
-                ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
-                : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
-            }`}
-            aria-label={showOnlyCurrentLayer ? 'Show all layers' : 'Show current layer only'}
-          >
-            {showOnlyCurrentLayer ? <Filter size={14} /> : <Eye size={14} />}
-          </Button>
+          <Tooltip content="Group selected (Ctrl+G)">
+            <Button
+              onPress={onGroupSelected}
+              isDisabled={selectedEntityIds.size < 2}
+              className="px-2 py-1 text-xs rounded-lg transition-all bg-white/5 text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Group selected (Ctrl+G)"
+            >
+              <Group size={14} />
+            </Button>
+          </Tooltip>
+          <Tooltip content="Ungroup (Ctrl+Shift+G)">
+            <Button
+              onPress={onUngroupSelected}
+              isDisabled={!hasSelectedGroup}
+              className="px-2 py-1 text-xs rounded-lg transition-all bg-white/5 text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Ungroup (Ctrl+Shift+G)"
+            >
+              <Ungroup size={14} />
+            </Button>
+          </Tooltip>
+          <Tooltip content="Merge paths (Ctrl+M)">
+            <Button
+              onPress={onMergePaths}
+              isDisabled={!canMerge}
+              className="px-2 py-1 text-xs rounded-lg transition-all bg-white/5 text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Merge paths (Ctrl+M)"
+            >
+              <Merge size={14} />
+            </Button>
+          </Tooltip>
+          <Tooltip content={showOnlyCurrentLayer ? 'Show all layers' : 'Show current layer only'}>
+            <Button
+              onPress={() => setShowOnlyCurrentLayer(!showOnlyCurrentLayer)}
+              className={`px-2 py-1 text-xs rounded-lg transition-all ${
+                showOnlyCurrentLayer
+                  ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
+                  : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
+              }`}
+              aria-label={showOnlyCurrentLayer ? 'Show all layers' : 'Show current layer only'}
+            >
+              {showOnlyCurrentLayer ? <Filter size={14} /> : <Eye size={14} />}
+            </Button>
+          </Tooltip>
         </div>
       </div>
 

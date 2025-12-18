@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NumberField, Label, Input, Button, Switch } from 'react-aria-components'
 import { Lock, Unlock } from 'lucide-react'
+import { Tooltip } from '../ui/Tooltip'
 import type { ExtendedFabricObject } from '../../types/FabricExtensions'
 
 interface PlacementPanelProps {
@@ -159,17 +160,19 @@ export function PlacementPanel({
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium text-text-muted">Scale</Label>
-          <Button
-            onPress={() => setLockAspectRatio(!lockAspectRatio)}
-            className={`p-1.5 rounded-lg transition-all ${
-              lockAspectRatio
-                ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
-                : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
-            }`}
-            aria-label={lockAspectRatio ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-          >
-            {lockAspectRatio ? <Lock size={16} /> : <Unlock size={16} />}
-          </Button>
+          <Tooltip content={lockAspectRatio ? 'Unlock aspect ratio' : 'Lock aspect ratio'}>
+            <Button
+              onPress={() => setLockAspectRatio(!lockAspectRatio)}
+              className={`p-1.5 rounded-lg transition-all ${
+                lockAspectRatio
+                  ? 'bg-primary/20 text-primary shadow-[0_0_8px_rgba(45,212,168,0.2)]'
+                  : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
+              }`}
+              aria-label={lockAspectRatio ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+            >
+              {lockAspectRatio ? <Lock size={16} /> : <Unlock size={16} />}
+            </Button>
+          </Tooltip>
         </div>
         <NumberField
           value={parseFloat(scaleX.toFixed(2))}

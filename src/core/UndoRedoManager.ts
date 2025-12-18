@@ -64,6 +64,34 @@ export class UndoRedoManager {
   }
 
   /**
+   * Record a command without executing it.
+   * Use this when the action has already been performed and you just need to track it for undo.
+   */
+  record(command: Command): void {
+    // Skip if we're in the middle of undo/redo
+    if (this._isInTransaction) return
+
+    // Check if we can merge with the last command
+    const lastCommand = this.undoStack[this.undoStack.length - 1]
+    if (lastCommand && command.canMergeWith?.(lastCommand)) {
+      const merged = command.mergeWith!(lastCommand)
+      this.undoStack[this.undoStack.length - 1] = merged
+    } else {
+      this.undoStack.push(command)
+    }
+
+    // Clear redo stack on new action
+    this.redoStack = []
+
+    // Trim if over max size
+    while (this.undoStack.length > this.maxStackSize) {
+      this.undoStack.shift()
+    }
+
+    this.notifyListeners()
+  }
+
+  /**
    * Undo the last command.
    * Returns true if undo was performed, false if stack was empty.
    */

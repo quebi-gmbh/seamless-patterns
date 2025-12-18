@@ -153,7 +153,7 @@ export function useZoomView({
       if (now - lastUpdate < 33) return
 
       lastUpdate = now
-      const pointer = fabricCanvas.getViewportPoint(e.e)
+      const pointer = fabricCanvas.getScenePoint(e.e)
       setCenterPoint({ x: pointer.x, y: pointer.y })
     }
 

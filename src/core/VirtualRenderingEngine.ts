@@ -119,13 +119,18 @@ export class VirtualRenderingEngine {
    *
    * @param ctx - Canvas 2D rendering context
    * @param objects - Array of canonical objects to render
+   * @param zoom - Current canvas zoom level (default 1)
    */
   renderVirtualCopies(
     ctx: CanvasRenderingContext2D,
-    objects: ExtendedFabricObject[]
+    objects: ExtendedFabricObject[],
+    zoom: number = 1
   ): void {
     // Sort objects by layer order for proper rendering
     const sortedObjects = this.sortByLayerOrder(objects);
+
+    // Scale tile offsets by zoom since canvas is zoomed
+    const scaledTileSize = this.tileSize * zoom;
 
     for (const obj of sortedObjects) {
       // Skip if object is not visible
@@ -144,8 +149,9 @@ export class VirtualRenderingEngine {
 
       // Render at each of the 24 surrounding tile positions
       for (const [tx, ty] of TILE_OFFSETS) {
-        const offsetX = tx * this.tileSize;
-        const offsetY = ty * this.tileSize;
+        // Use scaled tile size for zoomed canvas
+        const offsetX = tx * scaledTileSize;
+        const offsetY = ty * scaledTileSize;
 
         ctx.save();
         ctx.translate(offsetX, offsetY);
@@ -153,10 +159,10 @@ export class VirtualRenderingEngine {
         // Apply glow effect for highlighted objects
         if (isHighlighted && bounds) {
           ctx.shadowColor = "rgba(45, 212, 168, 0.8)";
-          ctx.shadowBlur = 20;
+          ctx.shadowBlur = 20 * zoom;
 
           // For small objects, draw a minimum-size glow rect behind
-          const minSize = 24;
+          const minSize = 24 * zoom;
           if (bounds.width < minSize && bounds.height < minSize) {
             const centerX = bounds.left + bounds.width / 2;
             const centerY = bounds.top + bounds.height / 2;
@@ -170,12 +176,17 @@ export class VirtualRenderingEngine {
               centerY - rectHeight / 2,
               rectWidth,
               rectHeight,
-              4
+              4 * zoom
             );
             ctx.fill();
           }
         }
 
+        // Fabric's setZoom applies viewport transform to canvas-rendered objects,
+        // but our manual render calls bypass that. Apply zoom scale here.
+        if (zoom !== 1) {
+          ctx.scale(zoom, zoom);
+        }
         obj.render(ctx);
         ctx.restore();
       }

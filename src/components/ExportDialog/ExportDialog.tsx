@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Modal, Dialog, Heading, Button, Label, Slider, SliderTrack, SliderThumb, SliderOutput, Switch } from 'react-aria-components'
 import { X } from 'lucide-react'
+import { Tooltip } from '../ui/Tooltip'
 import type { Canvas as FabricCanvasType } from 'fabric'
 import { generateCenterTileSVG, rasterizeSVG, convertFormat, downloadFile, type LayerBackground } from '../../utils/svgExport'
 
@@ -184,13 +185,15 @@ export function ExportDialog({ isOpen, onClose, fabricCanvas, tileSize, layerBac
           <>
             <div className="flex items-center justify-between px-6 py-4 border-b border-primary/10">
               <Heading className="text-lg font-semibold text-white">Export Tile</Heading>
-              <Button
-                onPress={close}
-                className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-text-muted hover:text-white"
-                aria-label="Close dialog"
-              >
-                <X size={18} />
-              </Button>
+              <Tooltip content="Close">
+                <Button
+                  onPress={close}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-text-muted hover:text-white"
+                  aria-label="Close dialog"
+                >
+                  <X size={18} />
+                </Button>
+              </Tooltip>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-4 flex gap-6">

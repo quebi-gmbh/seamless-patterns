@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Modal, Dialog, Heading, Button } from 'react-aria-components'
 import { X, FolderOpen } from 'lucide-react'
+import { Tooltip } from '../ui/Tooltip'
 
 interface ImportDialogProps {
   isOpen: boolean
@@ -56,13 +57,15 @@ export function ImportDialog({ isOpen, onClose, onImport }: ImportDialogProps) {
           <>
             <div className="flex items-center justify-between px-6 py-4 border-b border-primary/10">
               <Heading className="text-lg font-semibold text-white">Import SVG or Image</Heading>
-              <Button
-                onPress={close}
-                className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-text-muted hover:text-white"
-                aria-label="Close dialog"
-              >
-                <X size={18} />
-              </Button>
+              <Tooltip content="Close">
+                <Button
+                  onPress={close}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-text-muted hover:text-white"
+                  aria-label="Close dialog"
+                >
+                  <X size={18} />
+                </Button>
+              </Tooltip>
             </div>
 
             <div className="px-6 py-8">

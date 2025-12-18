@@ -103,3 +103,4 @@ export type CommandType =
   | 'layer-move'
   | 'layer-reorder'
   | 'batch'
+  | 'merge'

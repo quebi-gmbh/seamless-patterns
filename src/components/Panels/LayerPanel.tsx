@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, ListBox, ListBoxItem, TextField, Input } from 'react-aria-components'
 import { Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, Trash2, Plus, Settings } from 'lucide-react'
+import { Tooltip } from '../ui/Tooltip'
 import type { LayerManager, Layer } from '../../core/LayerManager'
 import { LayerSettingsDialog } from '../LayerSettingsDialog/LayerSettingsDialog'
 
@@ -96,13 +97,15 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange, onLaye
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-white">Layers</span>
-        <Button
-          onPress={handleCreateLayer}
-          className="p-1.5 bg-primary hover:bg-primary-light rounded-lg transition-all text-bg-dark shadow-[0_0_10px_rgba(45,212,168,0.2)] hover:shadow-[0_0_15px_rgba(45,212,168,0.4)]"
-          aria-label="Create new layer"
-        >
-          <Plus size={16} />
-        </Button>
+        <Tooltip content="Create new layer">
+          <Button
+            onPress={handleCreateLayer}
+            className="p-1.5 bg-primary hover:bg-primary-light rounded-lg transition-all text-bg-dark shadow-[0_0_10px_rgba(45,212,168,0.2)] hover:shadow-[0_0_15px_rgba(45,212,168,0.4)]"
+            aria-label="Create new layer"
+          >
+            <Plus size={16} />
+          </Button>
+        </Tooltip>
       </div>
 
       <ListBox
@@ -129,25 +132,29 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange, onLaye
             `}
           >
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <Button
-                onPress={() => handleToggleVisibility(layer.id)}
-                className={`p-1 hover:bg-white/10 rounded-lg transition-all ${
-                  layer.visible ? 'text-primary' : 'opacity-50'
-                }`}
-                aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
-              >
-                {layer.visible ? <Eye size={16} /> : <EyeOff size={16} />}
-              </Button>
+              <Tooltip content={layer.visible ? 'Hide layer' : 'Show layer'}>
+                <Button
+                  onPress={() => handleToggleVisibility(layer.id)}
+                  className={`p-1 hover:bg-white/10 rounded-lg transition-all ${
+                    layer.visible ? 'text-primary' : 'opacity-50'
+                  }`}
+                  aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+                >
+                  {layer.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                </Button>
+              </Tooltip>
 
-              <Button
-                onPress={() => handleToggleLock(layer.id)}
-                className={`p-1 hover:bg-white/10 rounded-lg transition-all ${
-                  layer.locked ? 'text-accent-coral' : ''
-                }`}
-                aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
-              >
-                {layer.locked ? <Lock size={16} /> : <Unlock size={16} />}
-              </Button>
+              <Tooltip content={layer.locked ? 'Unlock layer' : 'Lock layer'}>
+                <Button
+                  onPress={() => handleToggleLock(layer.id)}
+                  className={`p-1 hover:bg-white/10 rounded-lg transition-all ${
+                    layer.locked ? 'text-accent-coral' : ''
+                  }`}
+                  aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                >
+                  {layer.locked ? <Lock size={16} /> : <Unlock size={16} />}
+                </Button>
+              </Tooltip>
             </div>
 
             <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
@@ -180,36 +187,44 @@ export function LayerPanel({ layerManager, currentLayerId, onLayerChange, onLaye
             </div>
 
             <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-              <Button
-                onPress={() => handleMoveUp(index)}
-                isDisabled={index === 0}
-                className="p-1 hover:bg-white/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Move layer up"
-              >
-                <ChevronUp size={14} />
-              </Button>
-              <Button
-                onPress={() => handleMoveDown(index)}
-                isDisabled={index === layers.length - 1}
-                className="p-1 hover:bg-white/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Move layer down"
-              >
-                <ChevronDown size={14} />
-              </Button>
-              <Button
-                onPress={() => setSettingsLayerId(layer.id)}
-                className="p-1 hover:bg-white/10 rounded-lg transition-all"
-                aria-label="Layer settings"
-              >
-                <Settings size={14} />
-              </Button>
-              <Button
-                onPress={() => handleDeleteLayer(layer.id)}
-                className="p-1 hover:bg-accent-coral/20 text-accent-coral rounded-lg transition-all"
-                aria-label="Delete layer"
-              >
-                <Trash2 size={14} />
-              </Button>
+              <Tooltip content="Move layer up">
+                <Button
+                  onPress={() => handleMoveUp(index)}
+                  isDisabled={index === 0}
+                  className="p-1 hover:bg-white/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Move layer up"
+                >
+                  <ChevronUp size={14} />
+                </Button>
+              </Tooltip>
+              <Tooltip content="Move layer down">
+                <Button
+                  onPress={() => handleMoveDown(index)}
+                  isDisabled={index === layers.length - 1}
+                  className="p-1 hover:bg-white/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Move layer down"
+                >
+                  <ChevronDown size={14} />
+                </Button>
+              </Tooltip>
+              <Tooltip content="Layer settings">
+                <Button
+                  onPress={() => setSettingsLayerId(layer.id)}
+                  className="p-1 hover:bg-white/10 rounded-lg transition-all"
+                  aria-label="Layer settings"
+                >
+                  <Settings size={14} />
+                </Button>
+              </Tooltip>
+              <Tooltip content="Delete layer">
+                <Button
+                  onPress={() => handleDeleteLayer(layer.id)}
+                  className="p-1 hover:bg-accent-coral/20 text-accent-coral rounded-lg transition-all"
+                  aria-label="Delete layer"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </Tooltip>
             </div>
           </ListBoxItem>
         ))}

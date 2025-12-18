@@ -7,7 +7,9 @@
     "dev": "vite --host",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.0",
@@ -18,10 +20,13 @@
     "@codemirror/view": "^6.39.4",
     "@types/fabric": "^5.3.10",
     "fabric": "^6.9.1",
+    "fit-curve": "^0.2.0",
     "lucide-react": "^0.561.0",
+    "polygon-clipping": "^0.15.7",
     "react": "^18.3.1",
     "react-aria-components": "^1.13.0",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "simplify-js": "^1.2.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -38,7 +43,8 @@
     "tailwindcss": "^4",
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.18.1",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^4.0.16"
   },
   "packageManager": "pnpm@9.15.0"
 }

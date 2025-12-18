@@ -116,6 +116,10 @@ export function useFabricCanvas(
     const handleAfterRender = () => {
       const ctx = canvas.getContext();
       if (ctx) {
+        // Get current zoom level from canvas (set by FabricCanvas component)
+        const zoom = (canvas as any)._customZoom || 1;
+        const zoomedCanvasSize = CANVAS_SIZE * zoom;
+
         // Render layer backgrounds on top of canvas background but behind objects
         const backgrounds = layerBackgroundsRef.current;
 
@@ -129,60 +133,16 @@ export function useFabricCanvas(
           );
           for (const bg of sortedBackgrounds) {
             ctx.fillStyle = hexToRgba(bg.backgroundColor, bg.backgroundAlpha);
-            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            ctx.fillRect(0, 0, zoomedCanvasSize, zoomedCanvasSize);
           }
 
           ctx.restore();
         }
 
-        // Always re-render canonical objects in correct z-order from the store
-        // Fabric renders objects in its own order, but we need to respect canonicalStore.insertionOrder
-        // This ensures z-order changes are reflected correctly
-        const highlightedIds = virtualRenderer.getHighlightedMirrorGroupIds();
-        for (const obj of canonicalStore.getAll()) {
-          if (obj.visible !== false && obj.tiledMetadata) {
-            // Apply glow effect and scale for highlighted objects
-            const isHighlighted =
-              highlightedIds.size > 0 &&
-              highlightedIds.has(obj.tiledMetadata.mirrorGroupId);
-
-            if (isHighlighted) {
-              ctx.save();
-              ctx.shadowColor = "rgba(45, 212, 168, 0.8)";
-              ctx.shadowBlur = 5;
-
-              // For small objects, draw a minimum-size glow rect behind
-              const bounds = obj.getBoundingRect();
-              const minSize = 24;
-              if (bounds.width < minSize && bounds.height < minSize) {
-                const centerX = bounds.left + bounds.width / 2;
-                const centerY = bounds.top + bounds.height / 2;
-                const rectWidth = Math.max(bounds.width, minSize);
-                const rectHeight = Math.max(bounds.height, minSize);
-
-                ctx.fillStyle = "rgba(45, 212, 168, 0.3)";
-                ctx.beginPath();
-                ctx.roundRect(
-                  centerX - rectWidth / 2,
-                  centerY - rectHeight / 2,
-                  rectWidth,
-                  rectHeight,
-                  4
-                );
-                ctx.fill();
-              }
-            }
-
-            obj.render(ctx);
-
-            if (isHighlighted) {
-              ctx.restore();
-            }
-          }
-        }
-
-        // Render the 24 virtual copies around each canonical object
-        virtualRenderer.renderVirtualCopies(ctx, canonicalStore.getAll());
+        // Fabric has already rendered canonical objects with zoom applied via viewport transform.
+        // We only need to render the 24 virtual copies around each canonical object.
+        // Pass zoom so virtual renderer can apply correct offsets
+        virtualRenderer.renderVirtualCopies(ctx, canonicalStore.getAll(), zoom);
 
         // Re-render active selection controls on top of virtual copies
         // This ensures selection bounding box is always visible above neighboring objects
